@@ -24,6 +24,7 @@ import { Location, Staff, StaffInsert, Shift, ShiftInsert } from '@/types/databa
 import { useState } from 'react'
 import { Plus, Users, Calendar, Sparkles, Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { generateAIShifts } from './actions'
 
 interface HRClientProps {
     initialStaff: Staff[]
@@ -85,39 +86,30 @@ export function HRClient({ initialStaff, initialShifts, locations }: HRClientPro
 
     const handleGenerateAIShifts = async () => {
         setIsGeneratingShifts(true)
-        // Simulate AI generation - in production this would call OpenAI API
-        await new Promise(resolve => setTimeout(resolve, 1500))
 
-        // Create draft shifts
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(9, 0, 0, 0)
+        try {
+            const result = await generateAIShifts()
 
-        const endTime = new Date(tomorrow)
-        endTime.setHours(17, 0, 0, 0)
+            if (result.success) {
+                // Reload shifts from database
+                const { data } = await (supabase.from('shifts') as any)
+                    .select(`
+                        *,
+                        staff:staff_id (id, full_name, hourly_wage),
+                        locations:location_id (id, name)
+                    `)
+                    .order('created_at', { ascending: false })
 
-        // Create a draft shift for the first staff member
-        if (staff.length > 0 && locations.length > 0) {
-            const { data, error } = await (supabase.from('shifts') as any)
-                .insert({
-                    staff_id: staff[0].id,
-                    location_id: locations[0].id,
-                    start_time: tomorrow.toISOString(),
-                    end_time: endTime.toISOString(),
-                    role_assigned: 'オーブン',
-                    status: 'draft',
-                })
-                .select(`
-                    *,
-                    staff:staff_id (id, full_name, hourly_wage),
-                    locations:location_id (id, name)
-                `)
-                .single()
+                if (data) {
+                    setShifts(data as any)
+                }
 
-            if (data) {
-                // Manually cast or rely on shape if complex join
-                setShifts([data as any, ...shifts])
+                console.log('AI Shifts generated:', result.message, result.reasoning)
+            } else {
+                console.error('AI Shift generation failed:', result.message)
             }
+        } catch (error) {
+            console.error('Error generating AI shifts:', error)
         }
 
         setIsGeneratingShifts(false)
