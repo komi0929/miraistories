@@ -27,7 +27,16 @@ export function LoginForm() {
         })
 
         if (error) {
-            setError(error.message)
+            // Translate common error messages to Japanese
+            let errorMessage = error.message
+            if (error.message.includes('Invalid login credentials')) {
+                errorMessage = 'メールアドレスまたはパスワードが正しくありません'
+            } else if (error.message.includes('Invalid API key')) {
+                errorMessage = 'システム設定エラーです。管理者にお問い合わせください'
+            } else if (error.message.includes('Email not confirmed')) {
+                errorMessage = 'メールアドレスが確認されていません'
+            }
+            setError(errorMessage)
             setLoading(false)
         } else {
             router.push('/dashboard')
@@ -39,9 +48,9 @@ export function LoginForm() {
         <div className="flex items-center justify-center min-h-screen bg-muted/40">
             <Card className="w-full max-w-sm">
                 <CardHeader>
-                    <CardTitle className="text-2xl text-center">Sweets ERP Login</CardTitle>
+                    <CardTitle className="text-2xl text-center">洋菓子店ERP ログイン</CardTitle>
                     <CardDescription className="text-center">
-                        Enter your credentials to access the negotiation system.
+                        アカウント情報を入力してシステムにアクセスしてください
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleLogin}>
@@ -52,18 +61,18 @@ export function LoginForm() {
                             </div>
                         )}
                         <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="email">メールアドレス</Label>
                             <Input
                                 id="email"
                                 type="email"
-                                placeholder="m@example.com"
+                                placeholder="example@company.co.jp"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="password">Password</Label>
+                            <Label htmlFor="password">パスワード</Label>
                             <Input
                                 id="password"
                                 type="password"
@@ -75,7 +84,7 @@ export function LoginForm() {
                     </CardContent>
                     <CardFooter>
                         <Button className="w-full" type="submit" disabled={loading}>
-                            {loading ? 'Signing in...' : 'Sign in'}
+                            {loading ? 'ログイン中...' : 'ログイン'}
                         </Button>
                     </CardFooter>
                 </form>
