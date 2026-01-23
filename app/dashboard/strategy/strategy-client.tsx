@@ -1,189 +1,354 @@
 'use client'
 
-import { AddAssetDialog } from '@/components/dashboard/add-asset-dialog'
-import { AssetTable } from '@/components/dashboard/asset-table'
-import { FinancialCharts } from '@/components/dashboard/financial-charts'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { usePokerFace } from '@/hooks/use-poker-face'
-import { calculateScenarioFinancials } from '@/lib/calculations'
-import { createClient } from '@/lib/supabase/client'
-import { Asset, Scenario, ScenarioAssetDecision, ScenarioAssetDecisionInsert, AuditLogInsert, ScenarioInsert } from '@/types/database.types'
-import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useState, useEffect, useRef } from 'react'
+import { SimulationData, SimulationResult, calculatePayback } from '@/lib/ma-simulation'
+import { chatWithAI, getAIReview } from './actions'
 
-interface StrategyClientProps {
-    initialScenarios: Scenario[]
-    initialAssets: Asset[]
-}
+export function StrategyClient() {
+    // 入力データ
+    const [data, setData] = useState<SimulationData>({
+        acquisitionCost: 5000000,
+        renovationCost: 1000000,
+        skeletonCost: 500000,
+        rent: 150000,
+        laborCost: 300000,
+        utilities: 50000,
+        otherExpenses: 50000,
+        monthlySales: 1200000,
+        costRatio: 35
+    })
 
-export function StrategyClient({ initialScenarios, initialAssets }: StrategyClientProps) {
-    const [assets, setAssets] = useState<Asset[]>(initialAssets)
-    const [scenarios, setScenarios] = useState<Scenario[]>(initialScenarios)
-    const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(
-        initialScenarios[0]?.id || null
-    )
-    const [decisions, setDecisions] = useState<Map<string, string>>(new Map())
-    const [loading, setLoading] = useState(false)
+    // 計算結果
+    const [result, setResult] = useState<SimulationResult | null>(null)
 
-    const supabase = createClient()
-    const { isPokerFaceMode } = usePokerFace()
+    // AIチャット
+    const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([])
+    const [chatInput, setChatInput] = useState('')
+    const [isAiLoading, setIsAiLoading] = useState(false)
+    const [aiReview, setAiReview] = useState<string>('')
+    const chatEndRef = useRef<HTMLDivElement>(null)
 
-    // Fetch Decisions when Scenario changes
+    // 入力変更時に自動計算
     useEffect(() => {
-        if (!selectedScenarioId) return
+        const newResult = calculatePayback(data)
+        setResult(newResult)
+    }, [data])
 
-        async function loadDecisions() {
-            setLoading(true)
-            const { data } = await (supabase.from('scenario_asset_decisions') as any)
-                .select('*')
-                .eq('scenario_id', selectedScenarioId) as { data: ScenarioAssetDecision[] | null }
-
-            const decisionsData = data
-            const newMap = new Map<string, string>()
-            decisionsData?.forEach((d) => {
-                if (d.asset_id && d.decision) {
-                    newMap.set(d.asset_id, d.decision)
-                }
-            })
-            setDecisions(newMap)
-            setLoading(false)
-        }
-        loadDecisions()
-    }, [selectedScenarioId])
-
-    // Calculate Real-time
-    const selectedScenario = scenarios.find(s => s.id === selectedScenarioId)
-
-    const decisionArray = Array.from(decisions.entries()).map(([asset_id, decision]) => ({
-        scenario_id: selectedScenarioId!,
-        asset_id,
-        decision: decision as 'buy' | 'lease' | 'return' | 'dispose' | null
-    }))
-
-    const nullMetrics = {
-        totalCapex: 0,
-        monthlyOpex: 0,
-        totalDepreciation: 0,
-        capacityLoss: false,
-        monthlyCashFlow: 0,
-        isCashShortage: false
+    // 入力ハンドラー
+    const handleInputChange = (field: keyof SimulationData, value: string) => {
+        const numValue = parseFloat(value) || 0
+        setData(prev => ({ ...prev, [field]: numValue }))
     }
 
-    const metrics = selectedScenario
-        ? calculateScenarioFinancials(assets, decisionArray, selectedScenario)
-        : nullMetrics
-
-    const handleDecisionChange = async (assetId: string, decision: 'buy' | 'lease' | 'return') => {
-        if (!selectedScenarioId) return
-
-        // Optimistic Update
-        const newDecisions = new Map(decisions)
-        newDecisions.set(assetId, decision)
-        setDecisions(newDecisions)
-
-        // Save to DB
-        const { error } = await (supabase.from('scenario_asset_decisions') as any).upsert({
-            scenario_id: selectedScenarioId,
-            asset_id: assetId,
-            decision: decision
-        })
-
-        if (error) {
-            console.error('Failed to save decision', error)
-        } else {
-            // Log Audit
-            await (supabase.from('audit_logs') as any).insert({
-                action_type: 'UPDATE_DECISION',
-                scenario_id: selectedScenarioId,
-                target_asset_id: assetId,
-                details: { decision }
-            })
-        }
+    // AIレビュー取得
+    const handleGetReview = async () => {
+        if (!result) return
+        setIsAiLoading(true)
+        const review = await getAIReview(data, result)
+        setAiReview(review)
+        setIsAiLoading(false)
     }
 
-    const createScenario = async () => {
-        const name = `シナリオ ${scenarios.length + 1}`
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+    // チャット送信
+    const handleSendChat = async () => {
+        if (!chatInput.trim() || !result) return
 
-        const { data, error } = await (supabase.from('scenarios') as any).insert({
-            name,
-            owner_id: user.id,
-            type: 'merger_deal'
-        }).select().single() as { data: Scenario | null, error: any }
+        const userMessage = chatInput.trim()
+        setChatMessages(prev => [...prev, { role: 'user', content: userMessage }])
+        setChatInput('')
+        setIsAiLoading(true)
 
-        if (data) {
-            setScenarios([data, ...scenarios])
-            setSelectedScenarioId(data.id)
-        }
+        const aiResponse = await chatWithAI(data, result, userMessage)
+        setChatMessages(prev => [...prev, { role: 'ai', content: aiResponse }])
+        setIsAiLoading(false)
+    }
+
+    // チャット自動スクロール
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [chatMessages])
+
+    // 金額フォーマット
+    const formatCurrency = (value: number) => {
+        if (!isFinite(value)) return '---'
+        return `¥${value.toLocaleString()}`
     }
 
     return (
-        <div className="flex flex-col space-y-4">
-            {/* Controls */}
-            <div className="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm">
-                <div className="flex items-center space-x-4">
-                    <div className="flex flex-col">
-                        <span className="text-xs text-slate-500 mb-1">シナリオ選択</span>
-                        <Select
-                            value={selectedScenarioId || ''}
-                            onValueChange={setSelectedScenarioId}
-                            disabled={loading}
-                        >
-                            <SelectTrigger className="w-[250px]">
-                                <SelectValue placeholder="シナリオを選択" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {scenarios.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>
-                                        {s.name}
-                                        {s.is_shared && (
-                                            <span className="ml-2 text-xs text-blue-500">[共有]</span>
-                                        )}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Button variant="outline" onClick={createScenario} size="sm">
-                        + 新規シナリオ
-                    </Button>
-                </div>
-                <AddAssetDialog onAssetAdded={(newAsset) => setAssets([...assets, newAsset])} />
+        <div className="space-y-6">
+            {/* ヘッダー */}
+            <div>
+                <h1 className="text-2xl font-bold text-slate-900">M&A 投資回収シミュレーション</h1>
+                <p className="text-slate-600 mt-1">譲渡後3年以内に初期投資＋スケルトン費用が回収可能かを判定</p>
             </div>
 
-            {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-                        <div className="px-4 py-3 border-b bg-slate-50">
-                            <h2 className="font-semibold text-slate-900">資産一覧</h2>
-                        </div>
-                        <AssetTable
-                            assets={assets}
-                            decisions={decisions}
-                            onDecisionChange={handleDecisionChange}
-                            readOnly={!selectedScenarioId || isPokerFaceMode}
-                        />
-                    </div>
+                {/* 左カラム：入力フォーム */}
+                <div className="space-y-4">
+                    {/* 初期投資・退去費用 */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">初期投資・退去費用</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div>
+                                <Label className="text-sm">譲渡価格</Label>
+                                <Input
+                                    type="number"
+                                    value={data.acquisitionCost}
+                                    onChange={(e) => handleInputChange('acquisitionCost', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">初期改装費</Label>
+                                <Input
+                                    type="number"
+                                    value={data.renovationCost}
+                                    onChange={(e) => handleInputChange('renovationCost', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">スケルトン費用（退去時）</Label>
+                                <Input
+                                    type="number"
+                                    value={data.skeletonCost}
+                                    onChange={(e) => handleInputChange('skeletonCost', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 販管費 */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">販管費（月額）</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div>
+                                <Label className="text-sm">家賃</Label>
+                                <Input
+                                    type="number"
+                                    value={data.rent}
+                                    onChange={(e) => handleInputChange('rent', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">人件費</Label>
+                                <Input
+                                    type="number"
+                                    value={data.laborCost}
+                                    onChange={(e) => handleInputChange('laborCost', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">光熱費</Label>
+                                <Input
+                                    type="number"
+                                    value={data.utilities}
+                                    onChange={(e) => handleInputChange('utilities', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">その他経費</Label>
+                                <Input
+                                    type="number"
+                                    value={data.otherExpenses}
+                                    onChange={(e) => handleInputChange('otherExpenses', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 売上見込み */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">売上見込み</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div>
+                                <Label className="text-sm">月間売上予測</Label>
+                                <Input
+                                    type="number"
+                                    value={data.monthlySales}
+                                    onChange={(e) => handleInputChange('monthlySales', e.target.value)}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-sm">原価率（%）</Label>
+                                <Input
+                                    type="number"
+                                    value={data.costRatio}
+                                    onChange={(e) => handleInputChange('costRatio', e.target.value)}
+                                    className="mt-1"
+                                    min={0}
+                                    max={100}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
+                {/* 中央カラム：シミュレーション結果 */}
                 <div className="space-y-4">
-                    <div className="bg-white rounded-lg border shadow-sm p-4">
-                        <h2 className="font-semibold text-slate-900 mb-4">財務シミュレーション</h2>
-                        <FinancialCharts metrics={metrics} />
-                    </div>
+                    {/* 判定結果 */}
+                    <Card className={result?.canRecoverIn3Years ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">3年回収判定</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-center py-4">
+                                <div className={`text-4xl font-bold ${result?.canRecoverIn3Years ? 'text-green-600' : 'text-red-600'}`}>
+                                    {result?.canRecoverIn3Years ? '✅ 回収可能' : '❌ 回収不可'}
+                                </div>
+                                <div className="text-lg mt-2 text-slate-700">
+                                    回収期間: {result?.paybackMonths === Infinity ? '---' : `${result?.paybackMonths}ヶ月`}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                    {/* Private Notes - Hidden in Poker Face Mode */}
-                    {!isPokerFaceMode && (
-                        <div className="p-4 border rounded-lg bg-amber-50 border-amber-200 text-amber-800 text-sm">
-                            <strong>内部メモ:</strong>
-                            <p className="mt-1">
-                                オーブン2000Xの減価償却スケジュールを確認すること。
-                                競合他社の入札状況に注意。
-                            </p>
-                        </div>
-                    )}
+                    {/* 財務サマリー */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">財務サマリー</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="flex justify-between py-2 border-b">
+                                <span className="text-slate-600">総投資額</span>
+                                <span className="font-semibold">{formatCurrency(result?.totalInvestment ?? 0)}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b">
+                                <span className="text-slate-600">月間粗利</span>
+                                <span className="font-semibold">{formatCurrency(result?.monthlyGrossProfit ?? 0)}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b">
+                                <span className="text-slate-600">月間営業利益</span>
+                                <span className={`font-semibold ${(result?.monthlyOperatingProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatCurrency(result?.monthlyOperatingProfit ?? 0)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between py-2">
+                                <span className="text-slate-600">年間キャッシュフロー</span>
+                                <span className={`font-semibold ${(result?.annualCashFlow ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatCurrency(result?.annualCashFlow ?? 0)}
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* 累積キャッシュフローグラフ（簡易版） */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">累積キャッシュフロー（36ヶ月）</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="h-40 flex items-end justify-between gap-0.5">
+                                {result?.cumulativeCashFlow.map((cf, i) => {
+                                    const maxAbs = Math.max(...result.cumulativeCashFlow.map(Math.abs), 1)
+                                    const height = Math.abs(cf) / maxAbs * 100
+                                    const isPositive = cf >= 0
+                                    return (
+                                        <div
+                                            key={i}
+                                            className="flex-1 flex flex-col justify-end h-full"
+                                            title={`${i + 1}ヶ月目: ${formatCurrency(cf)}`}
+                                        >
+                                            <div
+                                                className={`w-full ${isPositive ? 'bg-green-400' : 'bg-red-400'} rounded-t`}
+                                                style={{ height: `${height}%`, minHeight: '2px' }}
+                                            />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-500 mt-2">
+                                <span>1ヶ月</span>
+                                <span>18ヶ月</span>
+                                <span>36ヶ月</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* 右カラム：AIアドバイザー */}
+                <div className="space-y-4">
+                    {/* AIレビュー */}
+                    <Card>
+                        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                            <CardTitle className="text-base">AIレビュー</CardTitle>
+                            <Button size="sm" onClick={handleGetReview} disabled={isAiLoading}>
+                                {isAiLoading ? '分析中...' : 'レビュー取得'}
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {aiReview ? (
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap">{aiReview}</p>
+                            ) : (
+                                <p className="text-sm text-slate-400">「レビュー取得」をクリックしてAI分析を実行</p>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* AIチャット */}
+                    <Card className="flex flex-col" style={{ height: '400px' }}>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base">AIアドバイザー</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 flex flex-col overflow-hidden">
+                            {/* チャット履歴 */}
+                            <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-2">
+                                {chatMessages.length === 0 && (
+                                    <p className="text-sm text-slate-400">この案件について何でも質問してください</p>
+                                )}
+                                {chatMessages.map((msg, i) => (
+                                    <div
+                                        key={i}
+                                        className={`p-3 rounded-lg text-sm ${msg.role === 'user'
+                                            ? 'bg-blue-100 text-blue-900 ml-8'
+                                            : 'bg-slate-100 text-slate-800 mr-8'
+                                            }`}
+                                    >
+                                        <div className="font-semibold text-xs mb-1">
+                                            {msg.role === 'user' ? 'あなた' : 'AI'}
+                                        </div>
+                                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                                    </div>
+                                ))}
+                                {isAiLoading && (
+                                    <div className="bg-slate-100 text-slate-600 p-3 rounded-lg mr-8 text-sm">
+                                        考え中...
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
+                            </div>
+
+                            {/* 入力欄 */}
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="質問を入力..."
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
+                                    disabled={isAiLoading}
+                                />
+                                <Button onClick={handleSendChat} disabled={isAiLoading || !chatInput.trim()}>
+                                    送信
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </div>
