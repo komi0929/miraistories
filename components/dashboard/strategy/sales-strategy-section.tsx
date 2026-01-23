@@ -129,16 +129,16 @@ export function SalesStrategySection({ data, onChange }: SalesStrategySectionPro
                         </div>
 
                         {/* 案件積み上げ */}
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-end">
-                                <Label className="text-sm">積み上げ案件 (Deal Stacking)</Label>
-                                <div className="flex items-center space-x-2">
-                                    <Label className="text-xs">シミュレーション:</Label>
+                        <div className="space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
+                                <Label className="text-sm font-semibold text-slate-700">積み上げ案件 (Deal Stacking)</Label>
+                                <div className="flex items-center space-x-2 bg-slate-50 p-1.5 rounded-md border text-xs">
+                                    <span className="text-slate-500 whitespace-nowrap">計算対象:</span>
                                     <Select
                                         value={data.probabilityFilter}
                                         onValueChange={(val: any) => onChange({ ...data, probabilityFilter: val })}
                                     >
-                                        <SelectTrigger className="w-[140px] h-7 text-xs">
+                                        <SelectTrigger className="w-[110px] h-6 text-xs border-0 bg-transparent focus:ring-0 p-0">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -170,7 +170,7 @@ export function SalesStrategySection({ data, onChange }: SalesStrategySectionPro
                                                     onValueChange={(val) => handleDealChange(deal.id, 'probability', val)}
                                                 >
                                                     <SelectTrigger className={`w-20 h-8 text-xs ${deal.probability === 'high' ? 'text-green-600 font-bold' :
-                                                            deal.probability === 'medium' ? 'text-blue-600' : 'text-slate-500'
+                                                        deal.probability === 'medium' ? 'text-blue-600' : 'text-slate-500'
                                                         }`}>
                                                         <SelectValue />
                                                     </SelectTrigger>

@@ -10,6 +10,7 @@ import { chatWithAI, getAIReview } from './actions'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
 import { ExpenseSection } from '@/components/dashboard/strategy/expense-section'
 import { SalesStrategySection } from '@/components/dashboard/strategy/sales-strategy-section'
+import { FinancialChartsSection } from '@/components/dashboard/strategy/financial-charts-section'
 
 export function StrategyClient() {
     // 入力データ（初期値）
