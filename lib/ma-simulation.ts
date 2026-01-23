@@ -1,5 +1,21 @@
 // M&A シミュレーション用型定義と計算ロジック（クライアント用）
 
+export interface ExpenseItem {
+    id: string
+    name: string
+    amount: number
+}
+
+// 案件（積み上げ売上）
+export interface SalesDeal {
+    id: string
+    name: string
+    monthlyAmount: number
+    startMonth: number // 1~36
+    durationMonths: number
+    probability: 'high' | 'medium' | 'low' // 高:100%計算, 中:50%計算, 低:除外または重み付け
+}
+
 export interface SimulationData {
     // 初期投資
     acquisitionCost: number  // 譲渡価格
@@ -7,26 +23,51 @@ export interface SimulationData {
     skeletonCost: number     // スケルトン費用（退去時）
 
     // 販管費（月額）
-    rent: number             // 家賃
-    laborCost: number        // 人件費
-    utilities: number        // 光熱費
-    otherExpenses: number    // その他経費
+    useDetailedExpenses: boolean // 詳細入力モードか
+    rent: number             // 家賃（固定）
+    utilities: number        // 光熱費（簡易入力）
+    laborCostTotal: number   // 人件費（簡易入力）
+    laborDetails: ExpenseItem[] // 人件費明細
+    otherExpensesTotal: number // その他経費（簡易入力）
+    leaseDetails: ExpenseItem[] // リース・その他経費明細
 
     // 売上見込み
-    monthlySales: number     // 月間売上
     costRatio: number        // 原価率（%）
+
+    // 売上戦略
+    salesStrategyMode: 'simple' | 'detailed'
+    monthlySalesSimple: number // 簡易入力用
+    yearlySalesBaseline: {
+        year1: number
+        year2: number
+        year3: number
+    }
+    deals: SalesDeal[]
+
+    // シミュレーション設定
+    probabilityFilter: 'all' | 'high_only' | 'weighted'
 }
 
 export interface SimulationResult {
     // 計算結果
-    monthlyGrossProfit: number      // 月間粗利
-    monthlyOperatingProfit: number  // 月間営業利益
-    annualCashFlow: number          // 年間キャッシュフロー
+    monthlyGrossProfit: number      // 直近月（または平均）の粗利
+    monthlyOperatingProfit: number  // 直近月（または平均）の営業利益
+    annualCashFlow: number          // 初年度CF
     totalInvestment: number         // 総投資額
     paybackMonths: number           // 回収期間（月）
     canRecoverIn3Years: boolean     // 3年回収可能か
 
-    // 月別累積CF（36ヶ月分）
+    // 月別データ（36ヶ月分）
+    monthlyData: {
+        month: number
+        sales: number
+        grossProfit: number
+        expenses: number
+        operatingProfit: number
+        cashFlow: number // 累積CF
+    }[]
+
+    // 累積CF（グラフ用配列）
     cumulativeCashFlow: number[]
 }
 
@@ -34,32 +75,109 @@ export interface SimulationResult {
  * 投資回収シミュレーション計算
  */
 export function calculatePayback(data: SimulationData): SimulationResult {
-    const totalMonthlyExpenses = data.rent + data.laborCost + data.utilities + data.otherExpenses
-    const monthlyGrossProfit = data.monthlySales * (1 - data.costRatio / 100)
-    const monthlyOperatingProfit = monthlyGrossProfit - totalMonthlyExpenses
-    const annualCashFlow = monthlyOperatingProfit * 12
+    // 1. 初期投資
     const totalInvestment = data.acquisitionCost + data.renovationCost + data.skeletonCost
 
-    // 回収期間計算
-    const paybackMonths = monthlyOperatingProfit > 0
-        ? Math.ceil(totalInvestment / monthlyOperatingProfit)
-        : Infinity
+    // 2. 経費計算（月額固定と仮定）
+    let totalMonthlyExpenses = 0
 
-    // 36ヶ月分の累積キャッシュフロー
+    // 家賃
+    totalMonthlyExpenses += data.rent
+    // 光熱費
+    totalMonthlyExpenses += data.utilities
+
+    // 人件費
+    if (data.useDetailedExpenses) {
+        const laborTotal = data.laborDetails.reduce((sum, item) => sum + item.amount, 0)
+        totalMonthlyExpenses += laborTotal
+    } else {
+        totalMonthlyExpenses += data.laborCostTotal
+    }
+
+    // その他経費・リース
+    if (data.useDetailedExpenses) {
+        const leaseTotal = data.leaseDetails.reduce((sum, item) => sum + item.amount, 0)
+        totalMonthlyExpenses += leaseTotal
+    } else {
+        totalMonthlyExpenses += data.otherExpensesTotal
+    }
+
+    // 3. 36ヶ月シミュレーション
+    const monthlyData: SimulationResult['monthlyData'] = []
     const cumulativeCashFlow: number[] = []
     let cumulative = -totalInvestment
-    for (let i = 1; i <= 36; i++) {
+    let firstYearOperatingProfit = 0
+
+    for (let month = 1; month <= 36; month++) {
+        // 月間売上計算
+        let monthlySales = 0
+
+        if (data.salesStrategyMode === 'simple') {
+            monthlySales = data.monthlySalesSimple
+        } else {
+            // ベースライン売上
+            if (month <= 12) monthlySales = data.yearlySalesBaseline.year1
+            else if (month <= 24) monthlySales = data.yearlySalesBaseline.year2
+            else monthlySales = data.yearlySalesBaseline.year3
+
+            // 案件積み上げ
+            for (const deal of data.deals) {
+                // 期間内かチェック
+                if (month >= deal.startMonth && month < deal.startMonth + deal.durationMonths) {
+                    // 確度フィルタ/重み付け
+                    let dealAmount = 0
+                    if (data.probabilityFilter === 'all') {
+                        dealAmount = deal.monthlyAmount
+                    } else if (data.probabilityFilter === 'high_only') {
+                        if (deal.probability === 'high') dealAmount = deal.monthlyAmount
+                    } else if (data.probabilityFilter === 'weighted') {
+                        if (deal.probability === 'high') dealAmount = deal.monthlyAmount * 1.0
+                        else if (deal.probability === 'medium') dealAmount = deal.monthlyAmount * 0.5
+                        else dealAmount = deal.monthlyAmount * 0.2
+                    }
+                    monthlySales += dealAmount
+                }
+            }
+        }
+
+        // 粗利・営業利益
+        const monthlyGrossProfit = monthlySales * (1 - data.costRatio / 100)
+        const monthlyOperatingProfit = monthlyGrossProfit - totalMonthlyExpenses
+
+        if (month <= 12) {
+            firstYearOperatingProfit += monthlyOperatingProfit
+        }
+
+        // 累積CF更新
         cumulative += monthlyOperatingProfit
+
+        monthlyData.push({
+            month,
+            sales: monthlySales,
+            grossProfit: monthlyGrossProfit,
+            expenses: totalMonthlyExpenses,
+            operatingProfit: monthlyOperatingProfit,
+            cashFlow: cumulative
+        })
         cumulativeCashFlow.push(cumulative)
     }
 
+    // 回収期間計算
+    // 累積CFがプラスに転じた最初の月を探す
+    const recoveredIndex = cumulativeCashFlow.findIndex(cf => cf >= 0)
+    const paybackMonths = recoveredIndex === -1 ? Infinity : recoveredIndex + 1
+
+    // 直近月（1ヶ月目）または平均の営業指標（表示用）
+    const firstMonthData = monthlyData[0]
+
     return {
-        monthlyGrossProfit,
-        monthlyOperatingProfit,
-        annualCashFlow,
+        monthlyGrossProfit: firstMonthData.grossProfit,
+        monthlyOperatingProfit: firstMonthData.operatingProfit,
+        annualCashFlow: firstYearOperatingProfit, // 初年度CF
         totalInvestment,
         paybackMonths,
         canRecoverIn3Years: paybackMonths <= 36,
+        monthlyData,
         cumulativeCashFlow
     }
 }
