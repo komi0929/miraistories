@@ -264,9 +264,13 @@ export function StrategyClient() {
                         </CardHeader>
                         <CardContent>
                             {aiReview ? (
-                                <p className="text-sm text-slate-700 whitespace-pre-wrap">{aiReview}</p>
+                                <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-md border border-slate-200">
+                                    {aiReview}
+                                </div>
                             ) : (
-                                <p className="text-sm text-slate-400">「レビュー取得」をクリックしてAI分析を実行</p>
+                                <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-md border border-dashed">
+                                    <p>「レビュー取得」をクリックして<br />プロフェッショナル分析を実行</p>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
@@ -293,8 +297,8 @@ export function StrategyClient() {
                                     <div
                                         key={i}
                                         className={`p-3 rounded-lg text-sm ${msg.role === 'user'
-                                                ? 'bg-blue-100 text-blue-900 ml-8'
-                                                : 'bg-slate-100 text-slate-800 mr-8'
+                                            ? 'bg-blue-100 text-blue-900 ml-8'
+                                            : 'bg-slate-100 text-slate-800 mr-8'
                                             }`}
                                     >
                                         <div className="font-semibold text-xs mb-1">
