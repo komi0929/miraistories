@@ -2,6 +2,10 @@
 
 import { getGeminiModel } from '@/lib/ai/gemini'
 import { SimulationData, SimulationResult } from '@/lib/ma-simulation'
+import { createClient } from '@/lib/supabase/server'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database, Json } from '@/types/database.types'
+import { revalidatePath } from 'next/cache'
 
 const ADVISOR_PERSONA = `
 あなたは、スイーツ/飲食業界に精通した、極めて有能かつ冷徹な「戦略的CFO兼法務パートナー」です。
@@ -104,9 +108,10 @@ ${salesContext}
 
         const response = await model.generateContent(context)
         return response.response.text()
-    } catch (error) {
+    } catch (error: any) {
         console.error('AI chat error:', error)
-        return '申し訳ありません。現在AIパートナーに接続できません。しばらく待ってから再試行してください。'
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        return `申し訳ありません。現在AIパートナーに接続できません。\nエラー詳細: ${errorMessage}\n(API Key configured: ${!!process.env.GOOGLE_API_KEY})`
     }
 }
 
@@ -148,8 +153,93 @@ ${ADVISOR_PERSONA}
 
         const response = await model.generateContent(prompt)
         return response.response.text()
-    } catch (error) {
+    } catch (error: any) {
         console.error('AI review error:', error)
-        return 'レビューを生成できませんでした。'
+        // デバッグ用に詳細なエラーを返す
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        return `レビューを生成できませんでした。\n\nエラー詳細: ${errorMessage}\n(API Key configured: ${!!process.env.GOOGLE_API_KEY})`
     }
+}
+
+/**
+ * シミュレーション履歴の保存
+ */
+export async function saveSimulation(
+    data: SimulationData,
+    title: string
+) {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('ログインが必要です')
+    }
+
+    // 型定義が修正されたため、正しい型を使用
+    const { error } = await supabase
+        .from('ma_simulations')
+        .insert({
+            user_id: user.id,
+            title: title || '無題のシミュレーション',
+            simulation_data: data as unknown as Json
+        })
+
+    if (error) {
+        console.error('Save error:', error)
+        throw new Error('保存に失敗しました')
+    }
+
+    revalidatePath('/dashboard/strategy')
+    return { success: true }
+}
+
+/**
+ * シミュレーション履歴の取得
+ */
+export async function getSimulations() {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return []
+
+    const { data, error } = await supabase
+        .from('ma_simulations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+    if (error) {
+        console.error('Fetch error:', error)
+        return []
+    }
+
+    return (data || []).map((item: any) => ({
+        ...item,
+        simulation_data: item.simulation_data as unknown as SimulationData
+    }))
+}
+
+/**
+ * シミュレーション履歴の削除
+ */
+export async function deleteSimulation(id: string) {
+    const supabase = await createClient() as any
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('ログインが必要です')
+    }
+
+    const { error } = await supabase
+        .from('ma_simulations')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+
+    if (error) {
+        throw new Error('削除に失敗しました')
+    }
+
+    revalidatePath('/dashboard/strategy')
+    return { success: true }
 }

@@ -11,6 +11,7 @@ import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
 import { ExpenseSection } from '@/components/dashboard/strategy/expense-section'
 import { SalesStrategySection } from '@/components/dashboard/strategy/sales-strategy-section'
 import { FinancialChartsSection } from '@/components/dashboard/strategy/financial-charts-section'
+import { SimulationHistory } from '@/components/dashboard/strategy/simulation-history'
 
 export function StrategyClient() {
     // 入力データ（初期値）
@@ -47,6 +48,11 @@ export function StrategyClient() {
     // 計算結果
     const [result, setResult] = useState<SimulationResult | null>(null)
 
+    // 履歴ロードハンドラ
+    const handleHistoryLoad = (loadedData: SimulationData) => {
+        setData(loadedData)
+    }
+
     // AIチャット
     const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([])
     const [chatInput, setChatInput] = useState('')
@@ -59,6 +65,7 @@ export function StrategyClient() {
         const newResult = calculatePayback(data)
         setResult(newResult)
     }, [data])
+
 
     // AIレビュー取得
     const handleGetReview = async () => {
@@ -97,9 +104,12 @@ export function StrategyClient() {
     return (
         <div className="space-y-6 pb-20">
             {/* ヘッダー */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">M&A 投資回収シミュレーション</h1>
-                <p className="text-slate-600 mt-1">譲渡後3年以内に初期投資＋スケルトン費用が回収可能かを詳細にシミュレーション</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">M&A 投資回収シミュレーション</h1>
+                    <p className="text-slate-600 mt-1">譲渡後3年以内に初期投資＋スケルトン費用が回収可能かを詳細にシミュレーション</p>
+                </div>
+                <SimulationHistory data={data} onLoad={handleHistoryLoad} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

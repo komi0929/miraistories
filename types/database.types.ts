@@ -476,12 +476,51 @@ export interface Database {
                     created_at?: string
                 }
             }
+            // ============================================
+            // M&A SIMULATIONS (Phase 2 Addon)
+            // ============================================
+            ma_simulations: {
+                Row: {
+                    id: string
+                    user_id: string
+                    title: string
+                    simulation_data: Json
+                    created_at: string
+                    is_favorite: boolean
+                }
+                Insert: {
+                    id?: string
+                    user_id?: string
+                    title: string
+                    simulation_data: Json
+                    created_at?: string
+                    is_favorite?: boolean
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    title?: string
+                    simulation_data?: Json
+                    created_at?: string
+                    is_favorite?: boolean
+                }
+                Relationships: []
+            }
         }
         Functions: {
             is_admin: {
                 Args: Record<string, never>
                 Returns: boolean
             }
+        }
+        Views: {
+            [_ in never]: never
+        }
+        Enums: {
+            [_ in never]: never
+        }
+        CompositeTypes: {
+            [_ in never]: never
         }
     }
 }
