@@ -9,51 +9,85 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
 
-export function LoginForm() {
+export function SignupForm() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState(false)
     const router = useRouter()
     const supabase = createClient()
 
-    async function handleLogin(e: React.FormEvent) {
+    async function handleSignup(e: React.FormEvent) {
         e.preventDefault()
         setLoading(true)
         setError(null)
 
-        const { error } = await supabase.auth.signInWithPassword({
+        if (password !== confirmPassword) {
+            setError('パスワードが一致しません')
+            setLoading(false)
+            return
+        }
+
+        if (password.length < 6) {
+            setError('パスワードは6文字以上必要です')
+            setLoading(false)
+            return
+        }
+
+        const { error } = await supabase.auth.signUp({
             email,
             password,
         })
 
         if (error) {
             let errorMessage = error.message
-            if (error.message.includes('Invalid login credentials')) {
-                errorMessage = 'メールアドレスまたはパスワードが正しくありません'
-            } else if (error.message.includes('Invalid API key')) {
-                errorMessage = 'システム設定エラーです。管理者にお問い合わせください'
-            } else if (error.message.includes('Email not confirmed')) {
-                errorMessage = 'メールアドレスが確認されていません。確認メールをご確認ください'
+            if (error.message.includes('already registered')) {
+                errorMessage = 'このメールアドレスは既に登録されています'
+            } else if (error.message.includes('Invalid email')) {
+                errorMessage = 'メールアドレスの形式が正しくありません'
             }
             setError(errorMessage)
             setLoading(false)
         } else {
-            router.push('/dashboard')
-            router.refresh()
+            setSuccess(true)
+            setLoading(false)
         }
+    }
+
+    if (success) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-muted/40">
+                <Card className="w-full max-w-sm">
+                    <CardHeader>
+                        <CardTitle className="text-2xl text-center text-green-600">登録完了！</CardTitle>
+                        <CardDescription className="text-center">
+                            確認メールを送信しました。メール内のリンクをクリックしてアカウントを有効化してください。
+                        </CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                        <Link href="/auth/login" className="w-full">
+                            <Button variant="outline" className="w-full">
+                                ログイン画面へ
+                            </Button>
+                        </Link>
+                    </CardFooter>
+                </Card>
+            </div>
+        )
     }
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-muted/40">
             <Card className="w-full max-w-sm">
                 <CardHeader>
-                    <CardTitle className="text-2xl text-center">洋菓子店ERP ログイン</CardTitle>
+                    <CardTitle className="text-2xl text-center">洋菓子店ERP 新規登録</CardTitle>
                     <CardDescription className="text-center">
-                        アカウント情報を入力してシステムにアクセス
+                        アカウントを作成してシステムを利用開始
                     </CardDescription>
                 </CardHeader>
-                <form onSubmit={handleLogin}>
+                <form onSubmit={handleSignup}>
                     <CardContent className="grid gap-4">
                         {error && (
                             <div className="text-sm font-medium text-destructive text-center">
@@ -76,19 +110,30 @@ export function LoginForm() {
                             <Input
                                 id="password"
                                 type="password"
+                                placeholder="6文字以上"
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="confirmPassword">パスワード（確認）</Label>
+                            <Input
+                                id="confirmPassword"
+                                type="password"
+                                required
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                            />
+                        </div>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2">
                         <Button className="w-full" type="submit" disabled={loading}>
-                            {loading ? 'ログイン中...' : 'ログイン'}
+                            {loading ? '登録中...' : 'アカウント作成'}
                         </Button>
-                        <Link href="/auth/signup" className="w-full">
+                        <Link href="/auth/login" className="w-full">
                             <Button variant="link" className="w-full text-sm">
-                                アカウントをお持ちでない方はこちら
+                                既にアカウントをお持ちの方はこちら
                             </Button>
                         </Link>
                     </CardFooter>
