@@ -1,31 +1,29 @@
 ---
 description: 改善後に自動的にGitコミット&プッシュ
 ---
-# Auto Commit & Deploy
 
-改善作業完了後にこのワークフローを実行すると、自動的にGitHubにコミット&プッシュされ、Vercelで本番デプロイが開始されます。
+# 自動コミットワークフロー
 
 // turbo-all
 
-## 1. ビルド確認
-```bash
-npm run build
-```
+## 手順
 
-## 2. 変更をステージング
+1. 変更をステージング
 ```bash
 git add -A
 ```
 
-## 3. 自動コミット
+2. コミット作成
 ```bash
-git commit -m "chore: 自動コミット - $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+git commit -m "改善: [自動検出された変更内容]"
 ```
 
-## 4. 本番環境へプッシュ
+3. リモートにプッシュ
 ```bash
 git push origin main
 ```
 
-## 完了
-プッシュ後、Vercelが自動的にビルド&デプロイを開始します。
+## 使用タイミング
+- コード修正完了後
+- バグ修正後
+- 機能追加後

@@ -1,5 +1,14 @@
-# Project Rules
+# プロジェクトルール
 
-## Communication Language
-- **ALL** reports, progress updates, and communications must be in **Japanese**.
-- This rule is permanent and applies to all future sessions.
+## 報告言語
+- すべての報告は**日本語**で行うこと
+
+## 作業スタイル
+- **確認・質問をしない** - 極限まで自律的に完璧に仕上げてから報告すること
+- 途中経過の確認は不要 - 最終結果のみ報告
+- 迷った場合は最適と判断した方法で実行する
+- SafeToAutoRun可能なコマンドは自動実行する
+
+## デプロイ
+- `/auto-commit` で自動Git + Vercelデプロイ
+- 改善完了後は自動的にプッシュする

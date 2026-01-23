@@ -1,34 +1,34 @@
 ---
 description: 改善後にGitHub/Vercel本番環境へ自動デプロイ
 ---
-# 本番デプロイワークフロー
 
-## 前提条件
-- GitHubリポジトリ: `https://github.com/komi0929/miraistories`
-- Vercel: GitHub連携済み（mainブランチへのプッシュで自動デプロイ）
+# 自動デプロイワークフロー
+
+// turbo-all
 
 ## 手順
 
-### 1. 変更をステージング
-// turbo
+1. ビルドテスト実行
+```bash
+npm run build
+```
+
+2. ビルド成功を確認後、変更をステージング
 ```bash
 git add -A
 ```
 
-### 2. コミット
-// turbo
+3. コミット作成（日本語メッセージ）
 ```bash
-git commit -m "fix/feat: [変更内容の説明]"
+git commit -m "feat: [変更内容の説明]"
 ```
 
-### 3. GitHubにプッシュ（Vercel自動デプロイ開始）
-// turbo
+4. mainブランチにプッシュ
 ```bash
 git push origin main
 ```
 
 ## 注意事項
-- Vercel環境変数が設定されていることを確認
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- ビルドエラーがないことを `npm run build` で確認してからプッシュ
+- Vercelは自動的にmainブランチの変更を検知してデプロイ
+- 環境変数はVercel管理画面で事前設定が必要
+- ビルドエラーが発生した場合は自動で修正を試みる
