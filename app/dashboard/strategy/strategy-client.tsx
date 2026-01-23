@@ -180,87 +180,8 @@ export function StrategyClient() {
                         </CardContent>
                     </Card>
 
-                    {/* 財務サマリー（初年度ベース） */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-base">財務サマリー（初年度）</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <div className="flex justify-between py-2 border-b">
-                                <span className="text-slate-600">総投資額</span>
-                                <span className="font-semibold">{formatCurrency(result?.totalInvestment ?? 0)}</span>
-                            </div>
-                            <div className="flex justify-between py-2 border-b">
-                                <span className="text-slate-600">粗利 (初月)</span>
-                                <span className="font-semibold">{formatCurrency(result?.monthlyGrossProfit ?? 0)}</span>
-                            </div>
-                            <div className="flex justify-between py-2 border-b">
-                                <span className="text-slate-600">営業利益 (初月)</span>
-                                <span className={`font-semibold ${(result?.monthlyOperatingProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatCurrency(result?.monthlyOperatingProfit ?? 0)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between py-2">
-                                <span className="text-slate-600">年間キャッシュフロー</span>
-                                <span className={`font-semibold ${(result?.annualCashFlow ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatCurrency(result?.annualCashFlow ?? 0)}
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* 累積キャッシュフローグラフ */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-base">キャッシュフロー推移（36ヶ月）</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="h-40 flex items-end justify-between gap-0.5">
-                                {result?.cumulativeCashFlow.map((cf, i) => {
-                                    const maxAbs = Math.max(...result.cumulativeCashFlow.map(Math.abs), 1000000)
-                                    // グラフがはみ出さないようにスケール調整
-                                    let height = Math.abs(cf) / maxAbs * 100
-                                    if (height > 100) height = 100
-
-                                    const isPositive = cf >= 0
-
-                                    // ゼロラインの位置（中心付近にするため）
-                                    // ここでは簡易的に、常に下から生やす棒グラフにするが、マイナスは赤、プラスは緑
-                                    // ※本来は正負で上下させるとより良いが、簡易実装のため色分けのみ
-
-                                    return (
-                                        <div
-                                            key={i}
-                                            className="flex-1 flex flex-col justify-end h-full group relative"
-                                        >
-                                            {/* ツールチップ */}
-                                            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 bg-black text-white text-xs p-1 rounded whitespace-nowrap z-10 mb-1">
-                                                {i + 1}ヶ月: {cf.toLocaleString()}
-                                            </div>
-
-                                            <div
-                                                className={`w-full ${isPositive ? 'bg-green-400' : 'bg-red-400'} rounded-t opacity-80 hover:opacity-100`}
-                                                style={{ height: `${Math.max(height, 2)}%` }}
-                                            />
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <div className="flex justify-between text-xs text-slate-500 mt-2 border-t pt-1">
-                                <span>1ヶ月</span>
-                                <span>12ヶ月</span>
-                                <span>24ヶ月</span>
-                                <span>36ヶ月</span>
-                            </div>
-
-                            {/* ゼロライン到達点（回収ポイント）の表示 */}
-                            {result?.paybackMonths && result.paybackMonths <= 36 && (
-                                <div className="text-center mt-2 text-xs font-bold text-green-600">
-                                    ▲ {result.paybackMonths}ヶ月目で回収完了
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    {/* 高度な財務チャート・分析セクション */}
+                    <FinancialChartsSection data={data} result={result} />
                 </div>
 
                 {/* 右カラム：AIアドバイザー */}
