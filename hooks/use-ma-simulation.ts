@@ -1,15 +1,50 @@
 import { useMemo } from 'react'
 
+export type SimulationResult = {
+    monthlyData: {
+        month: number
+        sales: number
+        profit: number
+        cumulativeProfit: number
+        isRecovery: boolean
+    }[]
+    summary: {
+        totalSales: number
+        totalOperatingProfit: number
+        finalCash: number
+        paybackMonths: number | null // null = 回収不能
+        profitMargin: number
+        roi: number
+    }
+    isPaybackOk: boolean
+    paybackYears: number // Added for compatibility
+    alerts: string[]
+    targetGap: number | null // 目標案件を含めば回収できる場合のギャップ額
+
+    // Legacy Compatibility Fields (calculated for existing UI)
+    cumulativeOperatingProfit: number
+    requiredImprovementPerMonth: number
+    averageMonthlyOperatingProfit: number
+    averageMonthlyFeeRevenue: number
+}
+
 // フォームデータの型定義（クライアントコンポーネントと同期）
-interface InputData {
+export interface InputData {
+    desiredTransferPrice: number
     skeletonCost: number
     rent: number
     utilities: number
     laborCostTotal: number
     laborDetails: any[]
     otherExpensesTotal: number
-    leaseDetails: any[]
+    leaseDetails: {
+        id: string
+        amount: number
+        paymentRemainingMonths?: number
+        [key: string]: any
+    }[]
     useDetailedExpenses: boolean
+    maxCapacitySales: number
     costRatio: number
     salesStrategyMode: 'simple' | 'detailed'
     monthlySalesSimple: number
@@ -18,142 +53,182 @@ interface InputData {
         id: string
         monthlyAmount: number
         startMonth: number
-        durationMonths: number
         isFactoryFeeTarget: boolean
+        probability?: 'fixed' | 'high' | 'target'
         [key: string]: any
     }[]
     factoryFeePercentage: number
 }
 
-interface SimulationResult {
-    // 3年間の合計
-    cumulativeSales: number
-    cumulativeGrossProfit: number
-    cumulativeFactoryFee: number
-    cumulativeFixedCost: number
-    cumulativeOperatingProfit: number // 3年間の累積営業利益
-    
-    // 判定用
-    paybackMonths: number
-    paybackYears: number
-    isPaybackOk: boolean
-    
-    // ナビゲーション用
-    requiredImprovementPerMonth: number // NG時に必要な月額改善額
-    averageMonthlyOperatingProfit: number // 平均月額営業利益
-    averageMonthlyFeeRevenue: number // 委託側（買い手）の平均月額受取フィー
-}
-
-export function useMaSimulation(data: InputData): SimulationResult {
+export const useMaSimulation = (data: InputData): SimulationResult => {
     return useMemo(() => {
-        const TOTAL_MONTHS = 36
+        // 1. 投資総額 = スケルトン費用 + 譲渡希望価格
+        const totalInvestment = (data.skeletonCost || 0) + (data.desiredTransferPrice || 0)
+
+        const monthlyData = []
+        let cumulativeProfit = 0
         let cumulativeSales = 0
-        let cumulativeFactoryFee = 0
-        let cumulativeFixedCost = 0
+        let cumulativeFactoryFee = 0 // For average fee calculation
         
-        // 月次PL計算ループ (1ヶ月目〜36ヶ月目)
-        for (let month = 1; month <= TOTAL_MONTHS; month++) {
-            // 1. 月額売上（ベースライン + 案件）
-            let monthlySales = 0
-            
+        // アラート管理
+        let capacityAlertTriggered = false
+        let lowLaborCostAlertTriggered = false
+
+        // 有効な案件（確度: Fixed or High）のみで計算
+        const validDeals = (data.deals || []).filter(d => d.probability === 'fixed' || d.probability === 'high')
+        
+        // 参考: Target案件
+        const targetDeals = (data.deals || []).filter(d => d.probability === 'target')
+
+        for (let month = 1; month <= 36; month++) {
+            // Baseline
+            let currentBaseline = 0
             if (data.salesStrategyMode === 'simple') {
-                monthlySales = data.monthlySalesSimple
+                currentBaseline = data.monthlySalesSimple
             } else {
-                // 年数判定
-                const yearIndex = Math.ceil(month / 12) // 1, 2, or 3
-                const baseline = yearIndex === 1 ? data.yearlySalesBaseline.year1 
-                            : yearIndex === 2 ? data.yearlySalesBaseline.year2 
-                            : data.yearlySalesBaseline.year3
+                if (month <= 12) currentBaseline = data.yearlySalesBaseline.year1
+                else if (month <= 24) currentBaseline = data.yearlySalesBaseline.year2
+                else currentBaseline = data.yearlySalesBaseline.year3
+            }
+
+            // Deals (valid only)
+            const dealsSales = validDeals.reduce((sum, deal) => {
+                if (month >= deal.startMonth) {
+                    return sum + deal.monthlyAmount
+                }
+                return sum
+            }, 0)
+
+            const totalMonthlySales = currentBaseline + dealsSales
+            
+            // Capacity Check
+            if (data.maxCapacitySales > 0 && totalMonthlySales > data.maxCapacitySales) {
+                capacityAlertTriggered = true
+            }
+
+            // Costs
+            const laborCost = data.laborCostTotal
+            
+            // Labor Ratio Check (Sales > 0 safe guard)
+            if (totalMonthlySales > 0) {
+                const laborRatio = (laborCost / totalMonthlySales) * 100
+                if (laborRatio < 15) {
+                    lowLaborCostAlertTriggered = true
+                }
+            }
+
+            // Factory Fee
+            let factoryFee = 0
+            if (data.factoryFeePercentage > 0) {
+                const dealsFeeTargetSales = validDeals.reduce((sum, deal) => {
+                    if (month >= deal.startMonth && deal.isFactoryFeeTarget) {
+                        return sum + deal.monthlyAmount
+                    }
+                    return sum
+                }, 0)
                 
-                // 期間内の案件を積算
-                const dealsAmount = data.deals
-                    .filter(d => {
-                        const start = d.startMonth || 1
-                        const end = start + (d.durationMonths || 12) - 1
-                        return month >= start && month <= end
-                    })
-                    .reduce((sum, d) => sum + (d.monthlyAmount || 0), 0)
-                
-                monthlySales = (baseline || 0) + dealsAmount
+                const totalFeeTargetSales = currentBaseline + dealsFeeTargetSales
+                factoryFee = totalFeeTargetSales * (data.factoryFeePercentage / 100)
+            }
+            cumulativeFactoryFee += factoryFee
+
+            const costOfGoods = totalMonthlySales * ((data.costRatio || 35) / 100)
+            
+            // Fixed Costs
+            const leaseCost = data.leaseDetails.reduce((sum, item) => {
+                if (item.paymentRemainingMonths && month > item.paymentRemainingMonths) {
+                    return sum
+                }
+                return sum + item.amount
+            }, 0)
+            
+            const otherFixed = data.rent + data.utilities + data.otherExpensesTotal + leaseCost
+            
+            const totalExpenses = costOfGoods + laborCost + factoryFee + otherFixed
+            const operatingProfit = totalMonthlySales - totalExpenses
+
+            cumulativeProfit += operatingProfit
+            cumulativeSales += totalMonthlySales
+
+            monthlyData.push({
+                month,
+                sales: totalMonthlySales,
+                profit: operatingProfit,
+                cumulativeProfit: cumulativeProfit,
+                isRecovery: cumulativeProfit >= totalInvestment
+            })
+        }
+
+        // Payback Logic (Fixed + High)
+        let paybackMonths: number | null = null
+        const recoveryMonthData = monthlyData.find(d => d.cumulativeProfit >= totalInvestment)
+        if (recoveryMonthData) {
+            paybackMonths = recoveryMonthData.month
+        }
+
+        const isPaybackOk = paybackMonths !== null
+        const totalOperatingProfit = cumulativeProfit
+        const paybackYears = paybackMonths ? parseFloat((paybackMonths / 12).toFixed(1)) : 99.9
+
+        // Summary Statistics
+        const totalSales = cumulativeSales
+        const profitMargin = totalSales > 0 ? (totalOperatingProfit / totalSales) * 100 : 0
+        const roi = totalInvestment > 0 ? (totalOperatingProfit / totalInvestment) * 100 : 0
+
+        // Alerts
+        const alertMessages: string[] = []
+        if (capacityAlertTriggered) {
+            alertMessages.push('⚠️ 売上が人員キャパシティを超過しています。追加採用または外注を検討してください。')
+        }
+        if (lowLaborCostAlertTriggered) {
+            alertMessages.push('⚠️ 人件費率が15%を下回っています。人員不足のリスクがあります。')
+        }
+
+        // Target Gap Calculation
+        let targetGap: number | null = null
+        if (!isPaybackOk && targetDeals.length > 0) {
+            let additionalProfit = 0
+            for (let m = 1; m <= 36; m++) {
+                const targetSales = targetDeals.reduce((sum, d) => (m >= d.startMonth ? sum + d.monthlyAmount : sum), 0)
+                const targetFee = targetDeals.reduce((sum, d) => (m >= d.startMonth && d.isFactoryFeeTarget ? sum + d.monthlyAmount : sum), 0) * (data.factoryFeePercentage / 100)
+                const targetCoGS = targetSales * (data.costRatio / 100)
+                additionalProfit += (targetSales - targetCoGS - targetFee)
             }
             
-            // 2. 委託工場フィー（対象案件のみ）
-            let feeTargetSales = 0
-            if (data.salesStrategyMode === 'simple') {
-                // 簡易モード: 全額対象と仮定するか0か仕様次第だが、ここでは0（詳細モード推奨）
-                // ※ 本来は簡易モードでも率をかけるべきかもしれないが、案件単位制御ができないため
+            if (cumulativeProfit + additionalProfit >= totalInvestment) {
+                targetGap = 0
             } else {
-                feeTargetSales = data.deals
-                    .filter(d => {
-                        const start = d.startMonth || 1
-                        const end = start + (d.durationMonths || 12) - 1
-                        return month >= start && month <= end && d.isFactoryFeeTarget
-                    })
-                    .reduce((sum, d) => sum + (d.monthlyAmount || 0), 0)
+                targetGap = (totalInvestment - (cumulativeProfit + additionalProfit))
             }
-            const monthlyFactoryFee = feeTargetSales * (data.factoryFeePercentage / 100)
-            
-            // 3. 固定費（月額）
-            const laborCost = data.useDetailedExpenses 
-                ? data.laborDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
-                : data.laborCostTotal
-                
-            const otherExpenses = data.useDetailedExpenses
-                ? data.leaseDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
-                : data.otherExpensesTotal
-    
-            const monthlyFixed = (data.rent || 0) + (data.utilities || 0) + laborCost + otherExpenses
-
-            // 累積加算
-            cumulativeSales += monthlySales
-            cumulativeFactoryFee += monthlyFactoryFee
-            cumulativeFixedCost += monthlyFixed
         }
-
-        // 4. 累積粗利 & 累積営業利益
-        // 粗利 = 売上 * (1 - 原価率)
-        const cumulativeGrossProfit = cumulativeSales * (1 - data.costRatio / 100)
         
-        // 営業利益 = 粗利 - 委託フィー - 固定費
-        const cumulativeOperatingProfit = cumulativeGrossProfit - cumulativeFactoryFee - cumulativeFixedCost
-        
-        // 5. 投資回収判定
-        // 回収に必要な利益 = 初期投資(スケルトン)
-        // 回収完了月を簡易的に計算: (初期投資 / 平均月利)
-        // ※ 厳密には月次キャッシュフローの累積で判定すべきだが、表示用には「平均」で割る方が直感的
-        
-        const averageMonthlyOperatingProfit = cumulativeOperatingProfit / TOTAL_MONTHS
-        const averageMonthlyFeeRevenue = cumulativeFactoryFee / TOTAL_MONTHS
-        
-        let paybackMonths = Infinity
-        if (averageMonthlyOperatingProfit > 0) {
-            paybackMonths = data.skeletonCost / averageMonthlyOperatingProfit
-        }
-
-        const paybackYears = paybackMonths === Infinity ? Infinity : paybackMonths / 12
-        const isPaybackOk = cumulativeOperatingProfit >= data.skeletonCost
-
-        // 6. 改善必要額 (NGの場合)
-        // (初期投資 - 累積利益) / 36ヶ月
-        let requiredImprovementPerMonth = 0
-        if (!isPaybackOk) {
-            const shortage = data.skeletonCost - cumulativeOperatingProfit
-            requiredImprovementPerMonth = shortage / TOTAL_MONTHS
-        }
+        // Legacy Calculations
+        const averageMonthlyOperatingProfit = cumulativeProfit / 36
+        const averageMonthlyFeeRevenue = cumulativeFactoryFee / 36 // Approx
+        // Required improvement if NG: (Deficit / 36)? Or strictly per remaining month? 
+        // Simple approximation: Total Deficit / 36
+        const requiredImprovementPerMonth = !isPaybackOk ? (totalInvestment - cumulativeProfit) / 36 : 0
 
         return {
-            cumulativeSales,
-            cumulativeGrossProfit,
-            cumulativeFactoryFee,
-            cumulativeFixedCost,
-            cumulativeOperatingProfit,
-            paybackMonths,
-            paybackYears,
+            monthlyData,
+            summary: {
+                totalSales,
+                totalOperatingProfit,
+                finalCash: cumulativeProfit - totalInvestment,
+                paybackMonths,
+                profitMargin,
+                roi
+            },
             isPaybackOk,
+            paybackYears,
+            alerts: alertMessages,
+            targetGap,
+            
+            // Legacy
+            cumulativeOperatingProfit: totalOperatingProfit,
             requiredImprovementPerMonth,
             averageMonthlyOperatingProfit,
             averageMonthlyFeeRevenue
         }
     }, [data])
 }
-

@@ -29,14 +29,16 @@ interface CollectFormClientProps {
 
 // 初期データ
 const initialFormData = {
-    skeletonCost: 3000000, // デフォルト: 300万円
+    desiredTransferPrice: 0, // 譲渡希望価格（税込）
+    skeletonCost: 3000000, 
     rent: 0,
     utilities: 0,
     laborCostTotal: 0,
     laborDetails: [] as { id: string; name: string; amount: number }[],
     otherExpensesTotal: 0,
-    leaseDetails: [] as { id: string; name: string; amount: number }[],
-    useDetailedExpenses: false,
+    leaseDetails: [] as { id: string; name: string; amount: number; paymentRemainingMonths?: number }[],
+    useDetailedExpenses: true,
+    maxCapacitySales: 0, // 人員キャパシティ
     costRatio: 35,
     salesStrategyMode: 'simple' as 'simple' | 'detailed',
     monthlySalesSimple: 0,
@@ -74,15 +76,40 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         const result = await getExistingResponse(linkId, resId)
         if (result.success && result.data) {
             const d = result.data
+            
+            // 旧データ（簡易入力）からの移行ロジック
+            let loadedLaborDetails = d.labor_details || []
+            let loadedLeaseDetails = d.lease_details || []
+            
+            // 詳細モードがOFF、かつ合計のみ入力されていた場合、それを詳細項目の1つとして復元する
+            if (!d.use_detailed_expenses) {
+                if (d.labor_cost_total && d.labor_cost_total > 0 && loadedLaborDetails.length === 0) {
+                    loadedLaborDetails = [{
+                        id: 'legacy-labor',
+                        name: '人件費（一括入力分）',
+                        amount: d.labor_cost_total
+                    }]
+                }
+                if (d.other_expenses_total && d.other_expenses_total > 0 && loadedLeaseDetails.length === 0) {
+                    loadedLeaseDetails = [{
+                        id: 'legacy-other',
+                        name: 'その他経費（一括入力分）',
+                        amount: d.other_expenses_total
+                    }]
+                }
+            }
+
             setFormData({
+                desiredTransferPrice: (d as any).desired_transfer_price || 0,
                 skeletonCost: d.skeleton_cost || 3000000,
                 rent: d.rent || 0,
                 utilities: d.utilities || 0,
                 laborCostTotal: d.labor_cost_total || 0,
-                laborDetails: d.labor_details || [],
+                laborDetails: loadedLaborDetails,
                 otherExpensesTotal: d.other_expenses_total || 0,
-                leaseDetails: d.lease_details || [],
-                useDetailedExpenses: d.use_detailed_expenses || false,
+                leaseDetails: loadedLeaseDetails,
+                useDetailedExpenses: true, // 常に詳細モードON
+                maxCapacitySales: (d as any).max_capacity_sales || 0,
                 costRatio: d.cost_ratio || 35,
                 salesStrategyMode: d.sales_strategy_mode || 'simple',
                 monthlySalesSimple: d.monthly_sales_simple || 0,
@@ -167,6 +194,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         setIsSaving(true)
         
         const result = await saveResponse(linkId, respondentId, {
+            desired_transfer_price: formData.desiredTransferPrice,
             skeleton_cost: formData.skeletonCost,
             rent: formData.rent,
             utilities: formData.utilities,
@@ -175,6 +203,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             other_expenses_total: formData.otherExpensesTotal,
             lease_details: formData.leaseDetails,
             use_detailed_expenses: formData.useDetailedExpenses,
+            max_capacity_sales: formData.maxCapacitySales,
             cost_ratio: formData.costRatio,
             sales_strategy_mode: formData.salesStrategyMode,
             monthly_sales_simple: formData.monthlySalesSimple,
@@ -220,6 +249,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         setConfirmOpen(false)
         
         const result = await saveResponse(linkId, respondentId, {
+            desired_transfer_price: formData.desiredTransferPrice,
             skeleton_cost: formData.skeletonCost,
             rent: formData.rent,
             utilities: formData.utilities,
@@ -228,6 +258,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             other_expenses_total: formData.otherExpensesTotal,
             lease_details: formData.leaseDetails,
             use_detailed_expenses: formData.useDetailedExpenses,
+            max_capacity_sales: formData.maxCapacitySales,
             cost_ratio: formData.costRatio,
             sales_strategy_mode: formData.salesStrategyMode,
             monthly_sales_simple: formData.monthlySalesSimple,

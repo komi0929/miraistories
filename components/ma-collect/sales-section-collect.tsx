@@ -21,8 +21,8 @@ interface SalesDeal {
     name: string
     monthlyAmount: number
     startMonth: number
-    durationMonths: number
-    probability: 'high' | 'medium' | 'low'
+    // durationMonths: removed (assumed permanent)
+    probability: 'fixed' | 'high' | 'target'
     isFactoryFeeTarget: boolean
 }
 
@@ -45,9 +45,8 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
             name: '新規案件',
             monthlyAmount: 300000,
             startMonth: 1,
-            durationMonths: 12,
-            probability: 'medium',
-            isFactoryFeeTarget: false
+            probability: 'high', // Default to High
+            isFactoryFeeTarget: true // Default to True
         }
         onChange(prev => ({ ...prev, deals: [...prev.deals, newDeal] }))
     }
@@ -64,6 +63,15 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
             return deal
         })
         onChange(prev => ({ ...prev, deals: newDeals }))
+    }
+
+    const getProbabilityLabel = (prob: string) => {
+        switch (prob) {
+            case 'fixed': return '確定・契約済'
+            case 'high': return '見込み・高'
+            case 'target': return '追加目標(未定)'
+            default: return prob
+        }
     }
 
     return (
@@ -172,8 +180,8 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                             <div className="space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
                                     <div>
-                                        <Label className="text-sm font-semibold text-slate-700">個別案件</Label>
-                                        <p className="text-xs text-slate-500">ベースラインに加えて、追加の案件があればご入力ください</p>
+                                        <Label className="text-sm font-semibold text-slate-700">個別案件の積み上げ</Label>
+                                        <p className="text-xs text-slate-500">獲得見込みのある案件を追加してください</p>
                                     </div>
                                 </div>
 
@@ -184,7 +192,10 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                 ) : (
                                     <div className="space-y-3">
                                         {data.deals.map((deal) => (
-                                            <div key={deal.id} className="bg-white p-4 rounded-md border shadow-sm space-y-3">
+                                            <div key={deal.id} className={`bg-white p-4 rounded-md border shadow-sm space-y-3 ${
+                                                deal.probability === 'target' ? 'border-dashed border-slate-300 bg-slate-50/50' : 
+                                                deal.probability === 'fixed' ? 'border-blue-200 bg-blue-50/30' : ''
+                                            }`}>
                                                 <div className="flex gap-2">
                                                     <Input
                                                         value={deal.name}
@@ -196,16 +207,17 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                         value={deal.probability}
                                                         onValueChange={(val) => handleDealChange(deal.id, 'probability', val)}
                                                     >
-                                                        <SelectTrigger className={`w-24 h-8 text-xs ${
-                                                            deal.probability === 'high' ? 'text-green-600 font-bold' :
-                                                            deal.probability === 'medium' ? 'text-blue-600' : 'text-slate-500'
+                                                        <SelectTrigger className={`w-36 h-8 text-xs font-medium border-none ring-1 ring-inset ${
+                                                            deal.probability === 'fixed' ? 'text-blue-700 bg-blue-100 ring-blue-300' :
+                                                            deal.probability === 'high' ? 'text-emerald-700 bg-emerald-100 ring-emerald-300' : 
+                                                            'text-slate-500 bg-slate-100 ring-slate-300'
                                                         }`}>
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="high">確度 高</SelectItem>
-                                                            <SelectItem value="medium">確度 中</SelectItem>
-                                                            <SelectItem value="low">確度 低</SelectItem>
+                                                            <SelectItem value="fixed">🔵 確定・契約済</SelectItem>
+                                                            <SelectItem value="high">🟢 見込み・高</SelectItem>
+                                                            <SelectItem value="target">⚪ 追加目標(未定)</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                     <Button
@@ -217,7 +229,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
-                                                <div className="grid grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-2 gap-2">
                                                     <div>
                                                         <Label className="text-[10px] text-slate-500">月額売上</Label>
                                                         <CurrencyInput
@@ -236,20 +248,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                                 className="h-7 text-xs pr-8"
                                                                 min={1} max={36}
                                                             />
-                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ヶ月目</span>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <Label className="text-[10px] text-slate-500">継続月数</Label>
-                                                        <div className="relative">
-                                                            <Input
-                                                                type="number"
-                                                                value={deal.durationMonths}
-                                                                onChange={(e) => handleDealChange(deal.id, 'durationMonths', parseInt(e.target.value))}
-                                                                className="h-7 text-xs pr-8"
-                                                                min={1}
-                                                            />
-                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ヶ月</span>
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ヶ月目〜</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -266,9 +265,15 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                             htmlFor={`factory-fee-${deal.id}`}
                                                             className="text-xs text-slate-600 cursor-pointer"
                                                         >
-                                                            この案件は委託工場フィーの対象です
+                                                            この案件は委託工場フィーの対象にする
                                                         </Label>
                                                     </div>
+                                                )}
+
+                                                {deal.probability === 'target' && (
+                                                    <p className="text-[10px] text-slate-400 text-right">
+                                                        ※「追加目標」は回収シミュレーションには含まれません（参考値）
+                                                    </p>
                                                 )}
                                             </div>
                                         ))}

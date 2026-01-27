@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Plus, Trash2, HelpCircle } from 'lucide-react'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
 import {
@@ -18,10 +17,12 @@ interface ExpenseItem {
     id: string
     name: string
     amount: number
+    paymentRemainingMonths?: number // undefined or 0 or null = ずっと続く
 }
 
 interface ExpenseSectionCollectProps {
     data: {
+        desiredTransferPrice: number // 譲渡希望価格
         rent: number
         utilities: number
         laborCostTotal: number
@@ -29,6 +30,7 @@ interface ExpenseSectionCollectProps {
         otherExpensesTotal: number
         leaseDetails: ExpenseItem[]
         useDetailedExpenses: boolean
+        maxCapacitySales: number // キャパシティ上限
     }
     onChange: (fn: (prev: any) => any) => void
 }
@@ -58,7 +60,7 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
     const addItem = (type: 'labor' | 'lease') => {
         const newItem: ExpenseItem = {
             id: Math.random().toString(36).substr(2, 9),
-            name: type === 'labor' ? '新規スタッフ' : '新規項目',
+            name: type === 'labor' ? '' : '',
             amount: 0
         }
 
@@ -77,87 +79,99 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
         }
     }
 
-    const laborTotal = data.useDetailedExpenses
-        ? data.laborDetails.reduce((sum, i) => sum + i.amount, 0)
-        : data.laborCostTotal
-
-    const otherTotal = data.useDetailedExpenses
-        ? data.leaseDetails.reduce((sum, i) => sum + i.amount, 0)
-        : data.otherExpensesTotal
+    const laborTotal = data.laborDetails.reduce((sum, i) => sum + i.amount, 0)
+    const otherTotal = data.leaseDetails.reduce((sum, i) => sum + i.amount, 0)
 
     return (
         <TooltipProvider>
-            <Card>
-                <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <CardTitle className="text-base">販管費（月額・税込）</CardTitle>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <HelpCircle className="w-4 h-4 text-slate-400" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                                <p>毎月発生する経費をご入力ください。詳細入力モードでは、スタッフごとの人件費なども入力できます。</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Label htmlFor="detailed-mode-collect" className="text-xs font-normal text-slate-500">詳細入力</Label>
-                        <Switch
-                            id="detailed-mode-collect"
-                            checked={data.useDetailedExpenses}
-                            onCheckedChange={(checked) => onChange(prev => ({ ...prev, useDetailedExpenses: checked }))}
-                        />
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* 固定項目: 家賃 */}
-                    <div>
-                        <Label className="text-sm">家賃（月額）</Label>
+            <div className="space-y-6">
+                {/* 譲渡希望価格 */}
+                <Card className="border-emerald-100 bg-emerald-50/50">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <CardTitle className="text-base text-emerald-900">譲渡希望価格（税込）</CardTitle>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <HelpCircle className="w-4 h-4 text-emerald-600" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                    <p>M&Aで希望する売却価格を入力してください。この金額を3年以内に回収できるかが判定基準となります。</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
                         <CurrencyInput
-                            value={data.rent}
-                            onChange={(val) => onChange(prev => ({ ...prev, rent: val }))}
-                            className="mt-1"
+                            value={data.desiredTransferPrice}
+                            onChange={(val) => onChange(prev => ({ ...prev, desiredTransferPrice: val }))}
+                            className="text-lg font-bold text-emerald-700 h-12"
                         />
-                    </div>
+                         <p className="text-xs text-emerald-600 mt-2">
+                            ※在庫資産や営業権（のれん）を含めた総額イメージをご入力ください
+                        </p>
+                    </CardContent>
+                </Card>
 
-                    {/* 固定項目: 光熱費 */}
-                    <div>
-                        <Label className="text-sm">光熱費（月額平均）</Label>
-                        <CurrencyInput
-                            value={data.utilities}
-                            onChange={(val) => onChange(prev => ({ ...prev, utilities: val }))}
-                            className="mt-1"
-                        />
-                    </div>
-
-                    {/* 人件費 */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <Label className="text-sm">人件費（月額）</Label>
-                            {data.useDetailedExpenses && (
-                                <span className="text-xs font-semibold text-slate-700">合計: ¥{laborTotal.toLocaleString()}</span>
-                            )}
+                <Card>
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <CardTitle className="text-base">販管費（月額・税込）</CardTitle>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <HelpCircle className="w-4 h-4 text-slate-400" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                    <p>毎月発生する経費をご入力ください。リース費用などは残りの支払期間も設定可能です。</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        {/* 固定項目: 家賃 */}
+                        <div>
+                            <Label className="text-sm">家賃（月額）</Label>
+                            <CurrencyInput
+                                value={data.rent}
+                                onChange={(val) => onChange(prev => ({ ...prev, rent: val }))}
+                                className="mt-1"
+                            />
                         </div>
 
-                        {!data.useDetailedExpenses ? (
+                        {/* 固定項目: 光熱費 */}
+                        <div>
+                            <Label className="text-sm">光熱費（月額平均）</Label>
                             <CurrencyInput
-                                value={data.laborCostTotal}
-                                onChange={(val) => onChange(prev => ({ ...prev, laborCostTotal: val }))}
+                                value={data.utilities}
+                                onChange={(val) => onChange(prev => ({ ...prev, utilities: val }))}
+                                className="mt-1"
                             />
-                        ) : (
+                        </div>
+
+                        {/* 人件費 */}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <div className="space-y-1">
+                                    <Label className="text-sm">人件費（月額）</Label>
+                                    <p className="text-[10px] text-slate-500">
+                                        ※給与＋法定福利費（社会保険料等）を含めた総額（会社負担額）を入力してください
+                                    </p>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-700">合計: ¥{laborTotal.toLocaleString()}</span>
+                            </div>
+
                             <div className="space-y-2 bg-slate-50 p-3 rounded-md border">
                                 {data.laborDetails.map((item) => (
                                     <div key={item.id} className="flex gap-2 items-center">
                                         <Input
                                             value={item.name}
                                             onChange={(e) => handleDetailChange('labor', item.id, 'name', e.target.value)}
-                                            className="flex-1 h-8 text-sm"
+                                            className="flex-1 h-8 text-sm bg-white"
                                             placeholder="役職/氏名"
                                         />
                                         <CurrencyInput
                                             value={item.amount}
                                             onChange={(val) => handleDetailChange('labor', item.id, 'amount', val)}
-                                            className="w-32 h-8 text-sm"
+                                            className="w-32 h-8 text-sm bg-white"
                                         />
                                         <Button
                                             variant="ghost"
@@ -178,37 +192,62 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                     <Plus className="h-3 w-3 mr-1" /> スタッフを追加
                                 </Button>
                             </div>
-                        )}
-                    </div>
-
-                    {/* その他経費・リース */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <Label className="text-sm">その他経費・リース（月額）</Label>
-                            {data.useDetailedExpenses && (
-                                <span className="text-xs font-semibold text-slate-700">合計: ¥{otherTotal.toLocaleString()}</span>
-                            )}
+                            
+                            {/* 最大生産キャパシティ入力 */}
+                            <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                <Label className="text-xs font-bold text-amber-800">現状体制での最大生産キャパシティ（月商目安）</Label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <CurrencyInput
+                                        value={data.maxCapacitySales}
+                                        onChange={(val) => onChange(prev => ({ ...prev, maxCapacitySales: val }))}
+                                        className="h-9 bg-white border-amber-200 focus:border-amber-400"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-amber-700 mt-1">
+                                    ※ 現状の人員配置で、追加採用なしに対応可能な売上の上限を入力してください。<br/>
+                                    これを超えるとシミュレーション上で警告が表示されます。
+                                </p>
+                            </div>
                         </div>
 
-                        {!data.useDetailedExpenses ? (
-                            <CurrencyInput
-                                value={data.otherExpensesTotal}
-                                onChange={(val) => onChange(prev => ({ ...prev, otherExpensesTotal: val }))}
-                            />
-                        ) : (
+                        {/* その他経費・リース */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <Label className="text-sm">その他経費・リース（月額）</Label>
+                                <span className="text-xs font-semibold text-slate-700">合計: ¥{otherTotal.toLocaleString()}</span>
+                            </div>
+
                             <div className="space-y-2 bg-slate-50 p-3 rounded-md border">
+                                <div className="grid grid-cols-[1fr_120px_100px_32px] gap-2 mb-1 px-1 text-xs text-slate-500 font-medium">
+                                    <div>項目名</div>
+                                    <div>月額</div>
+                                    <div>残支払(回)</div>
+                                    <div></div>
+                                </div>
+                                
                                 {data.leaseDetails.map((item) => (
-                                    <div key={item.id} className="flex gap-2 items-center">
+                                    <div key={item.id} className="grid grid-cols-[1fr_120px_100px_32px] gap-2 items-center">
                                         <Input
                                             value={item.name}
                                             onChange={(e) => handleDetailChange('lease', item.id, 'name', e.target.value)}
-                                            className="flex-1 h-8 text-sm"
+                                            className="h-8 text-sm bg-white"
                                             placeholder="項目名"
                                         />
                                         <CurrencyInput
                                             value={item.amount}
                                             onChange={(val) => handleDetailChange('lease', item.id, 'amount', val)}
-                                            className="w-32 h-8 text-sm"
+                                            className="h-8 text-sm bg-white"
+                                        />
+                                        <Input 
+                                            type="number"
+                                            value={item.paymentRemainingMonths || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value ? parseInt(e.target.value) : undefined
+                                                handleDetailChange('lease', item.id, 'paymentRemainingMonths', val as any)
+                                            }}
+                                            placeholder="∞"
+                                            className="h-8 text-sm bg-white text-right"
+                                            min={1}
                                         />
                                         <Button
                                             variant="ghost"
@@ -229,10 +268,13 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                     <Plus className="h-3 w-3 mr-1" /> 項目を追加
                                 </Button>
                             </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                            <p className="text-xs text-slate-500 text-right">
+                                ※ 残支払(回)が空欄の項目は、永続する経費として計算されます
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </TooltipProvider>
     )
 }
