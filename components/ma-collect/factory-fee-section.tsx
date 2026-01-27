@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { HelpCircle, Factory } from 'lucide-react'
+import { HelpCircle, Factory, Coins } from 'lucide-react'
 import {
     Tooltip,
     TooltipContent,
@@ -16,17 +16,18 @@ interface FactoryFeeSectionProps {
         factoryFeePercentage: number
         deals: any[]
     }
+    averageMonthlyFeeRevenue: number // New prop for calculated revenue
     onChange: (fn: (prev: any) => any) => void
 }
 
-export function FactoryFeeSection({ data, onChange }: FactoryFeeSectionProps) {
+export function FactoryFeeSection({ data, averageMonthlyFeeRevenue, onChange }: FactoryFeeSectionProps) {
     return (
         <TooltipProvider>
-            <Card className="border-purple-200">
-                <CardHeader className="pb-3">
+            <Card className="border-purple-200 shadow-sm">
+                <CardHeader className="pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-2">
                         <Factory className="w-5 h-5 text-purple-600" />
-                        <CardTitle className="text-base">委託工場フィー</CardTitle>
+                        <CardTitle className="text-base text-slate-800">委託工場フィー設定</CardTitle>
                         <Tooltip>
                             <TooltipTrigger>
                                 <HelpCircle className="w-4 h-4 text-slate-400" />
@@ -40,61 +41,49 @@ export function FactoryFeeSection({ data, onChange }: FactoryFeeSectionProps) {
                         譲渡後も発生する委託契約のフィー率がある場合にご入力ください
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5 pt-5">
                     <div>
-                        <Label className="text-sm">委託工場フィー率</Label>
-                        <div className="relative mt-1">
+                        <Label className="text-sm font-medium text-slate-700">委託工場フィー率</Label>
+                        <div className="relative mt-2">
                             <Input
                                 type="number"
                                 value={data.factoryFeePercentage}
                                 onChange={(e) => onChange(prev => ({ ...prev, factoryFeePercentage: parseFloat(e.target.value) || 0 }))}
-                                className="text-right pr-8"
+                                className="text-right pr-9 h-11 text-lg font-semibold"
                                 min={0}
                                 max={100}
                                 step={0.1}
                             />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">%</span>
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">%</span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-slate-500 mt-1.5">
                             フィー対象の案件の売上から、この率を差し引いて計算されます
                         </p>
                     </div>
-                    
-                    {data.factoryFeePercentage > 0 && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <h4 className="font-medium text-purple-900 text-sm mb-2">
-                                📝 フィー対象案件の設定について
-                            </h4>
-                            <p className="text-xs text-purple-700 leading-relaxed">
-                                フィー率を設定すると、「売上見込み」の各案件に「この案件は委託工場フィーの対象です」というチェックボックスが表示されます。
-                                <br /><br />
-                                対象の案件にチェックを入れると、その案件の売上から設定したフィー率分が差し引かれて計算されます。
-                            </p>
-                            
-                            {data.deals.length > 0 && (
-                                <div className="mt-3 pt-3 border-t border-purple-200">
-                                    <p className="text-xs text-purple-800 font-medium">
-                                        現在の設定: {data.deals.filter(d => d.isFactoryFeeTarget).length} / {data.deals.length} 件がフィー対象
-                                    </p>
-                                </div>
-                            )}
+
+                    {/* メリット可視化エリア */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-start gap-3">
+                        <div className="bg-purple-100 p-2 rounded-full shrink-0">
+                            <Coins className="w-5 h-5 text-purple-600" />
                         </div>
-                    )}
-                    
-                    {/* フィー計算の例 */}
-                    {data.factoryFeePercentage > 0 && (
-                        <div className="bg-slate-50 border rounded-lg p-4">
-                            <h4 className="font-medium text-slate-700 text-sm mb-2">
-                                💡 計算例
+                        <div>
+                            <h4 className="font-bold text-purple-900 text-sm mb-1">
+                                委託収益シミュレーション
                             </h4>
-                            <div className="text-xs text-slate-600 space-y-1">
-                                <p>月額売上 ¥1,000,000 の案件がフィー対象の場合:</p>
-                                <p className="font-mono bg-white px-2 py-1 rounded border inline-block">
-                                    ¥1,000,000 × {data.factoryFeePercentage}% = ¥{Math.round(1000000 * data.factoryFeePercentage / 100).toLocaleString()} がフィー
-                                </p>
-                                <p>
-                                    → 実質売上: ¥{Math.round(1000000 * (1 - data.factoryFeePercentage / 100)).toLocaleString()}
-                                </p>
+                            <p className="text-sm text-purple-800 leading-relaxed">
+                                現在の売上予測なら、貴社に <span className="font-bold text-lg underline decoration-purple-400 decoration-2 underline-offset-2">月額 約¥{Math.floor(averageMonthlyFeeRevenue || 0).toLocaleString()}</span> の委託収益が発生します
+                            </p>
+                            <p className="text-xs text-purple-600 mt-2">
+                                ※ 3年間の平均月額受取額（予測）
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {data.factoryFeePercentage > 0 && (
+                        <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded border">
+                            <div className="font-medium text-slate-700 mb-1">📝 フィー対象案件</div>
+                            <div>
+                                現在の設定: {data.deals.filter(d => d.isFactoryFeeTarget).length} / {data.deals.length} 件がフィー対象
                             </div>
                         </div>
                     )}

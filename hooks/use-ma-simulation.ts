@@ -17,6 +17,8 @@ interface InputData {
     deals: {
         id: string
         monthlyAmount: number
+        startMonth: number
+        durationMonths: number
         isFactoryFeeTarget: boolean
         [key: string]: any
     }[]
@@ -24,84 +26,134 @@ interface InputData {
 }
 
 interface SimulationResult {
-    monthlySales: number
-    monthlyGrossProfit: number
-    monthlyFactoryFee: number
-    monthlyFixedCost: number
-    monthlyOperatingProfit: number
+    // 3年間の合計
+    cumulativeSales: number
+    cumulativeGrossProfit: number
+    cumulativeFactoryFee: number
+    cumulativeFixedCost: number
+    cumulativeOperatingProfit: number // 3年間の累積営業利益
+    
+    // 判定用
     paybackMonths: number
     paybackYears: number
     isPaybackOk: boolean
+    
+    // ナビゲーション用
+    requiredImprovementPerMonth: number // NG時に必要な月額改善額
+    averageMonthlyOperatingProfit: number // 平均月額営業利益
+    averageMonthlyFeeRevenue: number // 委託側（買い手）の平均月額受取フィー
 }
 
 export function useMaSimulation(data: InputData): SimulationResult {
     return useMemo(() => {
-        // 1. 月額売上の算出
-        let monthlySales = 0
+        const TOTAL_MONTHS = 36
+        let cumulativeSales = 0
+        let cumulativeFactoryFee = 0
+        let cumulativeFixedCost = 0
         
-        if (data.salesStrategyMode === 'simple') {
-            monthlySales = data.monthlySalesSimple
-        } else {
-            // 詳細モード: 1期目のベースライン + 全案件の月額（簡易計算として全案件積上げ）
-            // ※ 厳密なタイムライン計算ではなく、ポテンシャル（最大月商）としての試算
-            const dealsTotal = data.deals.reduce((sum, deal) => sum + (deal.monthlyAmount || 0), 0)
-            monthlySales = (data.yearlySalesBaseline.year1 || 0) + dealsTotal
-        }
-
-        // 2. 委託工場フィー流出額
-        // 対象案件の売上合計 × 料率
-        let factoryFeeTargetSales = 0
-        if (data.salesStrategyMode === 'simple') {
-            // 簡易モードでは対象案件の概念がないため0（または全体にかける？仕様不明だが一旦0）
-            // ※ 基本的にフィー設定時は詳細モード推奨だが、ここでは案件ベースで計算
-        } else {
-            factoryFeeTargetSales = data.deals
-                .filter(d => d.isFactoryFeeTarget)
-                .reduce((sum, d) => sum + (d.monthlyAmount || 0), 0)
-        }
-        
-        const monthlyFactoryFee = factoryFeeTargetSales * (data.factoryFeePercentage / 100)
-
-        // 3. 月額粗利
-        // (売上 - 委託フィー) * (1 - 原価率) ではなく、仕様通り:
-        // 「月額粗利: 全案件の月額売上合計 × (100 - 原価率) / 100」
-        // ※ ただし、フィーは「流出額」として営業利益計算で引く指示
-        const monthlyGrossProfit = monthlySales * (1 - data.costRatio / 100)
-
-        // 4. 月額固定費
-        const laborCost = data.useDetailedExpenses 
-            ? data.laborDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
-            : data.laborCostTotal
+        // 月次PL計算ループ (1ヶ月目〜36ヶ月目)
+        for (let month = 1; month <= TOTAL_MONTHS; month++) {
+            // 1. 月額売上（ベースライン + 案件）
+            let monthlySales = 0
             
-        const otherExpenses = data.useDetailedExpenses
-            ? data.leaseDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
-            : data.otherExpensesTotal
+            if (data.salesStrategyMode === 'simple') {
+                monthlySales = data.monthlySalesSimple
+            } else {
+                // 年数判定
+                const yearIndex = Math.ceil(month / 12) // 1, 2, or 3
+                const baseline = yearIndex === 1 ? data.yearlySalesBaseline.year1 
+                            : yearIndex === 2 ? data.yearlySalesBaseline.year2 
+                            : data.yearlySalesBaseline.year3
+                
+                // 期間内の案件を積算
+                const dealsAmount = data.deals
+                    .filter(d => {
+                        const start = d.startMonth || 1
+                        const end = start + (d.durationMonths || 12) - 1
+                        return month >= start && month <= end
+                    })
+                    .reduce((sum, d) => sum + (d.monthlyAmount || 0), 0)
+                
+                monthlySales = (baseline || 0) + dealsAmount
+            }
+            
+            // 2. 委託工場フィー（対象案件のみ）
+            let feeTargetSales = 0
+            if (data.salesStrategyMode === 'simple') {
+                // 簡易モード: 全額対象と仮定するか0か仕様次第だが、ここでは0（詳細モード推奨）
+                // ※ 本来は簡易モードでも率をかけるべきかもしれないが、案件単位制御ができないため
+            } else {
+                feeTargetSales = data.deals
+                    .filter(d => {
+                        const start = d.startMonth || 1
+                        const end = start + (d.durationMonths || 12) - 1
+                        return month >= start && month <= end && d.isFactoryFeeTarget
+                    })
+                    .reduce((sum, d) => sum + (d.monthlyAmount || 0), 0)
+            }
+            const monthlyFactoryFee = feeTargetSales * (data.factoryFeePercentage / 100)
+            
+            // 3. 固定費（月額）
+            const laborCost = data.useDetailedExpenses 
+                ? data.laborDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
+                : data.laborCostTotal
+                
+            const otherExpenses = data.useDetailedExpenses
+                ? data.leaseDetails.reduce((sum, i) => sum + (i.amount || 0), 0)
+                : data.otherExpensesTotal
+    
+            const monthlyFixed = (data.rent || 0) + (data.utilities || 0) + laborCost + otherExpenses
 
-        const monthlyFixedCost = (data.rent || 0) + (data.utilities || 0) + laborCost + otherExpenses
+            // 累積加算
+            cumulativeSales += monthlySales
+            cumulativeFactoryFee += monthlyFactoryFee
+            cumulativeFixedCost += monthlyFixed
+        }
 
-        // 5. 月額営業利益
-        // 月額粗利 - 委託フィー流出額 - 月額固定費
-        const monthlyOperatingProfit = monthlyGrossProfit - monthlyFactoryFee - monthlyFixedCost
-
-        // 6. 投資回収期間(月)
-        // スケルトン工事費用 ÷ 月額営業利益
+        // 4. 累積粗利 & 累積営業利益
+        // 粗利 = 売上 * (1 - 原価率)
+        const cumulativeGrossProfit = cumulativeSales * (1 - data.costRatio / 100)
+        
+        // 営業利益 = 粗利 - 委託フィー - 固定費
+        const cumulativeOperatingProfit = cumulativeGrossProfit - cumulativeFactoryFee - cumulativeFixedCost
+        
+        // 5. 投資回収判定
+        // 回収に必要な利益 = 初期投資(スケルトン)
+        // 回収完了月を簡易的に計算: (初期投資 / 平均月利)
+        // ※ 厳密には月次キャッシュフローの累積で判定すべきだが、表示用には「平均」で割る方が直感的
+        
+        const averageMonthlyOperatingProfit = cumulativeOperatingProfit / TOTAL_MONTHS
+        const averageMonthlyFeeRevenue = cumulativeFactoryFee / TOTAL_MONTHS
+        
         let paybackMonths = Infinity
-        if (monthlyOperatingProfit > 0) {
-            paybackMonths = data.skeletonCost / monthlyOperatingProfit
+        if (averageMonthlyOperatingProfit > 0) {
+            paybackMonths = data.skeletonCost / averageMonthlyOperatingProfit
         }
 
         const paybackYears = paybackMonths === Infinity ? Infinity : paybackMonths / 12
-        const isPaybackOk = paybackMonths <= 36
+        const isPaybackOk = cumulativeOperatingProfit >= data.skeletonCost
+
+        // 6. 改善必要額 (NGの場合)
+        // (初期投資 - 累積利益) / 36ヶ月
+        let requiredImprovementPerMonth = 0
+        if (!isPaybackOk) {
+            const shortage = data.skeletonCost - cumulativeOperatingProfit
+            requiredImprovementPerMonth = shortage / TOTAL_MONTHS
+        }
 
         return {
-            monthlySales,
-            monthlyGrossProfit,
-            monthlyFactoryFee,
-            monthlyFixedCost,
-            monthlyOperatingProfit,
+            cumulativeSales,
+            cumulativeGrossProfit,
+            cumulativeFactoryFee,
+            cumulativeFixedCost,
+            cumulativeOperatingProfit,
             paybackMonths,
             paybackYears,
-            isPaybackOk
+            isPaybackOk,
+            requiredImprovementPerMonth,
+            averageMonthlyOperatingProfit,
+            averageMonthlyFeeRevenue
         }
     }, [data])
 }
+

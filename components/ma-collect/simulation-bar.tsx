@@ -1,37 +1,58 @@
 'use client'
 
-import { Card } from '@/components/ui/card'
-import { CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SimulationBarProps {
-    paybackMonths: number
     paybackYears: number
     isPaybackOk: boolean
-    monthlyOperatingProfit: number
+    monthlyOperatingProfit?: number // Legacy support (optional)
+    cumulativeOperatingProfit: number // New 3-year cumulative
+    requiredImprovementPerMonth: number
 }
 
 export function SimulationBar({ 
-    paybackMonths, 
     paybackYears, 
     isPaybackOk,
-    monthlyOperatingProfit
+    cumulativeOperatingProfit,
+    requiredImprovementPerMonth
 }: SimulationBarProps) {
-    const isProfitable = monthlyOperatingProfit > 0
+    const isProfitable = cumulativeOperatingProfit > 0
     const yearsDisplay = paybackYears === Infinity ? '---' : paybackYears.toFixed(1)
-    const monthsDisplay = paybackMonths === Infinity ? '---' : Math.ceil(paybackMonths)
+    
+    // 判定ロジック
+    // isProfitable: 3年間の累計が黒字か
+    // isPaybackOk: 3年（36ヶ月）以内に初期投資を回収できるか
+    
+    // 背景色とアイコンの決定
+    const statusColor = !isProfitable 
+        ? "red" 
+        : isPaybackOk 
+            ? "emerald" 
+            : "amber"
+            
+    const bgColor = !isProfitable 
+        ? "bg-red-50" 
+        : isPaybackOk 
+            ? "bg-emerald-50" 
+            : "bg-white"
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4 animate-in slide-in-from-bottom duration-300">
-            <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+        <div className={cn(
+            "fixed bottom-0 left-0 right-0 z-50 border-t shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] p-4 animate-in slide-in-from-bottom duration-300",
+            bgColor
+        )}>
+            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                
+                {/* 左側: ステータス表示 */}
+                <div className="flex items-center gap-4 w-full sm:w-auto">
                     <div className={cn(
-                        "flex items-center justify-center w-10 h-10 rounded-full",
+                        "flex shrink-0 items-center justify-center w-12 h-12 rounded-full shadow-sm border",
                         !isProfitable 
-                            ? "bg-red-100 text-red-600"
+                            ? "bg-red-100 border-red-200 text-red-600"
                             : isPaybackOk 
-                                ? "bg-green-100 text-green-600" 
-                                : "bg-amber-100 text-amber-600"
+                                ? "bg-emerald-100 border-emerald-200 text-emerald-600" 
+                                : "bg-amber-100 border-amber-200 text-amber-600"
                     )}>
                         {!isProfitable ? (
                             <AlertTriangle className="w-6 h-6" />
@@ -43,55 +64,55 @@ export function SimulationBar({
                     </div>
                     
                     <div>
-                        <div className="text-xs text-slate-500 font-medium mb-0.5">
-                            現在の回収見込み
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                            投資回収シミュレーション
                         </div>
-                        <div className="flex items-baseline gap-2">
+                        <div className="flex items-center gap-3">
                             {!isProfitable ? (
-                                <span className="text-lg font-bold text-red-600">回収不可（赤字）</span>
+                                <span className="text-xl font-bold text-red-700">回収不可（赤字）</span>
+                            ) : isPaybackOk ? (
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-xl font-bold text-emerald-800">回収見込み: {yearsDisplay}年</span>
+                                    <span className="text-sm font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                        基準クリア
+                                    </span>
+                                </div>
                             ) : (
-                                <>
-                                    <span className={cn(
-                                        "text-2xl font-bold font-mono",
-                                        isPaybackOk ? "text-slate-900" : "text-amber-600"
-                                    )}>
-                                        {yearsDisplay}年
-                                    </span>
-                                    <span className="text-sm text-slate-500">
-                                        ({monthsDisplay}ヶ月)
-                                    </span>
-                                </>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-xl font-bold text-amber-700">未達 ({yearsDisplay}年)</span>
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-right">
-                    <div className="hidden sm:block">
-                        <div className="text-xs text-slate-500">月額営業利益想定</div>
-                        <div className={cn(
-                            "text-sm font-semibold font-mono",
-                            isProfitable ? "text-slate-700" : "text-red-500"
-                        )}>
-                            ¥{Math.floor(monthlyOperatingProfit).toLocaleString()}
+                {/* 右側: アクションガイド */}
+                <div className="w-full sm:w-auto text-center sm:text-right bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
+                    {isPaybackOk ? (
+                        <div className="space-y-1">
+                            <div className="text-xs text-emerald-700 font-medium">3年間の累積利益予測</div>
+                            <div className="text-2xl font-bold text-emerald-600 font-mono tracking-tight">
+                                +¥{Math.floor(cumulativeOperatingProfit).toLocaleString()}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div className={cn(
-                        "px-3 py-1 rounded text-xs font-bold whitespace-nowrap",
-                        !isProfitable 
-                            ? "bg-red-100 text-red-700"
-                            : isPaybackOk 
-                                ? "bg-green-100 text-green-700" 
-                                : "bg-amber-100 text-amber-700"
-                    )}>
-                        {!isProfitable 
-                            ? "赤字" 
-                            : isPaybackOk 
-                                ? "条件達成" 
-                                : "基準未達 (3年超)"
-                        }
-                    </div>
+                    ) : !isProfitable ? (
+                        <div className="space-y-1">
+                            <div className="text-xs text-red-600 font-medium">黒字化に向けた改善が必要です</div>
+                            <div className="text-sm text-red-700 font-bold bg-red-100 px-3 py-1 rounded inline-block">
+                                収益構造の見直しを推奨
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1 justify-center sm:justify-end text-amber-700 font-medium">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>目標達成まであと</span>
+                            </div>
+                            <div className="text-sm sm:text-base">
+                                月額利益 <span className="text-xl font-bold text-amber-600 font-mono">+¥{Math.ceil(requiredImprovementPerMonth).toLocaleString()}</span> の改善が必要
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

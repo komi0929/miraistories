@@ -69,23 +69,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
     // リアルタイムシミュレーション
     const simResult = useMaSimulation(formData)
     
-    // セッション復元（localStorage）
-    useEffect(() => {
-        const savedEmail = localStorage.getItem(`ma_collect_${token}_email`)
-        if (savedEmail) {
-            setEmail(savedEmail)
-            // 認証状態を確認
-            checkRespondentAuth(linkId, savedEmail).then(result => {
-                if (result.authenticated && result.respondentId) {
-                    setRespondentId(result.respondentId)
-                    setAuthStep('authenticated')
-                    // 既存データを取得
-                    loadExistingData(result.respondentId)
-                }
-            })
-        }
-    }, [token, linkId])
-    
+    // 既存データを取得
     const loadExistingData = async (resId: string) => {
         const result = await getExistingResponse(linkId, resId)
         if (result.success && result.data) {
@@ -108,6 +92,23 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             })
         }
     }
+    
+    // セッション復元（localStorage）
+    useEffect(() => {
+        const savedEmail = localStorage.getItem(`ma_collect_${token}_email`)
+        if (savedEmail) {
+            setEmail(savedEmail)
+            // 認証状態を確認
+            checkRespondentAuth(linkId, savedEmail).then(result => {
+                if (result.authenticated && result.respondentId) {
+                    setRespondentId(result.respondentId)
+                    setAuthStep('authenticated')
+                    // 既存データを取得
+                    loadExistingData(result.respondentId)
+                }
+            })
+        }
+    }, [token, linkId])
     
     // メール送信
     const handleSendCode = async () => {
@@ -194,6 +195,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         if (!respondentId) return
 
         // シミュレーション結果が36ヶ月（3年）を超える場合は確認ダイアログを表示
+        // isPaybackOkがfalseの場合
         if (!simResult.isPaybackOk) {
             setConfirmOpen(true)
             return
@@ -204,15 +206,9 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
     }
     
     // 実際の送信処理
-    const executeSubmit = async () => {
+    const executeSubmit = async (supplementalInfo?: string) => {
         if (!respondentId) return
 
-        // 念のためのブラウザ標準確認（ダイアログ経由でない場合）
-        // ※ confirmOpen経由の場合は既にユーザーが「送信する」を押しているので二重確認は避けるが、
-        //   UIの統一性を考えると、ダイアログ内でのアクションが「確認」となる。
-        //   ここでは、標準confirmは「3年以内」の場合の誤操作防止として残すか、
-        //   もしくはConfirmDialogに統一するのが良いが、既存ロジック維持のため、条件分岐する。
-        
         // ダイアログが開いていない（条件クリア）場合のみ標準confirmを出す
         if (!confirmOpen) {
             if (!confirm('入力内容を送信します。送信後は編集できなくなります。よろしいですか？')) {
@@ -237,7 +233,8 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             monthly_sales_simple: formData.monthlySalesSimple,
             yearly_sales_baseline: formData.yearlySalesBaseline,
             deals: formData.deals,
-            factory_fee_percentage: formData.factoryFeePercentage
+            factory_fee_percentage: formData.factoryFeePercentage,
+            supplemental_info: supplementalInfo // 追加
         } as any, false)
         
         if (result.success) {
@@ -424,6 +421,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 {/* 委託工場フィー */}
                 <FactoryFeeSection
                     data={formData}
+                    averageMonthlyFeeRevenue={simResult.averageMonthlyFeeRevenue}
                     onChange={setFormData}
                 />
                 
@@ -451,10 +449,10 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
 
             {/* シミュレーション結果バー */}
             <SimulationBar 
-                paybackMonths={simResult.paybackMonths}
                 paybackYears={simResult.paybackYears}
                 isPaybackOk={simResult.isPaybackOk}
-                monthlyOperatingProfit={simResult.monthlyOperatingProfit}
+                cumulativeOperatingProfit={simResult.cumulativeOperatingProfit}
+                requiredImprovementPerMonth={simResult.requiredImprovementPerMonth}
             />
 
             {/* 送信確認ダイアログ */}
@@ -463,7 +461,8 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={executeSubmit}
                 paybackYears={simResult.paybackYears}
-                monthlyOperatingProfit={simResult.monthlyOperatingProfit}
+                cumulativeOperatingProfit={simResult.cumulativeOperatingProfit}
+                isPaybackOk={simResult.isPaybackOk}
             />
         </div>
     )

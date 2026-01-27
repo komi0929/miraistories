@@ -39,6 +39,7 @@ interface CollectionResponse {
     yearly_sales_baseline: { year1: number; year2: number; year3: number }
     deals: any[]
     factory_fee_percentage: number
+    supplemental_info?: string | null // 追加
 }
 
 /**
@@ -90,8 +91,7 @@ export async function requestVerification(linkId: string, email: string) {
             .eq('email', email)
             .single()
         
-        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "Relation not found" or "No rows"? No, it's "0 rows". 
-            // "Relation does not exist" is 42P01.
+        if (fetchError && fetchError.code !== 'PGRST116') {
             console.error('Database fetch error:', fetchError)
             return { success: false, error: 'データベースエラーが発生しました（テーブル未作成の可能性があります）' }
         }
