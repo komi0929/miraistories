@@ -14,6 +14,7 @@ export interface SalesDeal {
     startMonth: number // 1~36
     durationMonths: number
     probability: 'high' | 'medium' | 'low' // 高:100%計算, 中:50%計算, 低:除外または重み付け
+    isFactoryFeeTarget?: boolean // 委託工場フィー対象か（対象の場合、売上からフィーを差し引く）
 }
 
 export interface SimulationData {
@@ -46,6 +47,9 @@ export interface SimulationData {
 
     // シミュレーション設定
     probabilityFilter: 'all' | 'high_only' | 'weighted'
+
+    // 委託工場フィー（相手からの収集データ用）
+    factoryFeePercentage?: number // 委託工場フィー率（%）
 }
 
 export interface SimulationResult {
@@ -111,6 +115,7 @@ export function calculatePayback(data: SimulationData): SimulationResult {
     for (let month = 1; month <= 36; month++) {
         // 月間売上計算
         let monthlySales = 0
+        let monthlyFactoryFee = 0 // 委託工場フィー合計
 
         if (data.salesStrategyMode === 'simple') {
             monthlySales = data.monthlySalesSimple
@@ -136,12 +141,17 @@ export function calculatePayback(data: SimulationData): SimulationResult {
                         else dealAmount = deal.monthlyAmount * 0.2
                     }
                     monthlySales += dealAmount
+                    
+                    // 委託工場フィー計算（対象案件のみ）
+                    if (deal.isFactoryFeeTarget && data.factoryFeePercentage) {
+                        monthlyFactoryFee += dealAmount * (data.factoryFeePercentage / 100)
+                    }
                 }
             }
         }
-
-        // 粗利・営業利益
-        const monthlyGrossProfit = monthlySales * (1 - data.costRatio / 100)
+        // 粗利・営業利益（委託工場フィーは売上から差し引く）
+        const effectiveSales = monthlySales - monthlyFactoryFee
+        const monthlyGrossProfit = effectiveSales * (1 - data.costRatio / 100)
         const monthlyOperatingProfit = monthlyGrossProfit - totalMonthlyExpenses
 
         if (month <= 12) {
