@@ -76,45 +76,63 @@ export async function getLinkByToken(token: string) {
  * メールアドレスで認証コードを送信（簡易版: コードを返す）
  */
 export async function requestVerification(linkId: string, email: string) {
-    const supabase = await createClient()
-    
-    // 6桁の認証コードを生成
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString()
-    
-    // 既存の回答者をチェック
-    const { data: existing } = await (supabase as any)
-        .from('ma_collection_respondents')
-        .select('*')
-        .eq('link_id', linkId)
-        .eq('email', email)
-        .single()
-    
-    if (existing) {
-        // 既存のレコードを更新
-        await (supabase as any)
+    try {
+        const supabase = await createClient()
+        
+        // 6桁の認証コードを生成
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString()
+        
+        // 既存の回答者をチェック
+        const { data: existing, error: fetchError } = await (supabase as any)
             .from('ma_collection_respondents')
-            .update({ verification_code: verificationCode })
-            .eq('id', existing.id)
-    } else {
-        // 新規レコードを作成
-        await (supabase as any)
-            .from('ma_collection_respondents')
-            .insert({
-                link_id: linkId,
-                email,
-                verification_code: verificationCode,
-                verified: false
-            })
-    }
-    
-    // TODO: 実際のメール送信（現在はコンソールに出力）
-    console.log(`[MA Collection] Verification code for ${email}: ${verificationCode}`)
-    
-    return { 
-        success: true, 
-        message: '認証コードを送信しました。メールをご確認ください。',
-        // DEMO用: 本番環境でも認証コードを表示（本来は猶予期間後に削除すべき）
-        devCode: verificationCode 
+            .select('*')
+            .eq('link_id', linkId)
+            .eq('email', email)
+            .single()
+        
+        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "Relation not found" or "No rows"? No, it's "0 rows". 
+            // "Relation does not exist" is 42P01.
+            console.error('Database fetch error:', fetchError)
+            return { success: false, error: 'データベースエラーが発生しました（テーブル未作成の可能性があります）' }
+        }
+
+        if (existing) {
+            // 既存のレコードを更新
+            const { error: updateError } = await (supabase as any)
+                .from('ma_collection_respondents')
+                .update({ verification_code: verificationCode })
+                .eq('id', existing.id)
+            
+            if (updateError) throw updateError
+        } else {
+            // 新規レコードを作成
+            const { error: insertError } = await (supabase as any)
+                .from('ma_collection_respondents')
+                .insert({
+                    link_id: linkId,
+                    email,
+                    verification_code: verificationCode,
+                    verified: false
+                })
+                
+            if (insertError) {
+                console.error('Database insert error:', insertError)
+                return { success: false, error: 'データの保存に失敗しました' }
+            }
+        }
+        
+        // TODO: 実際のメール送信（現在はコンソールに出力）
+        console.log(`[MA Collection] Verification code for ${email}: ${verificationCode}`)
+        
+        return { 
+            success: true, 
+            message: '認証コードを送信しました。メールをご確認ください。',
+            // DEMO用: 本番環境でも認証コードを表示（本来は猶予期間後に削除すべき）
+            devCode: verificationCode 
+        }
+    } catch (error) {
+        console.error('Request Verification Error:', error)
+        return { success: false, error: 'サーバー接続エラーが発生しました' }
     }
 }
 
