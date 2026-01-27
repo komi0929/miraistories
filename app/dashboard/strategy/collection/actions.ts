@@ -46,7 +46,7 @@ export async function createCollectionLink(scenarioId?: string, name?: string) {
     
     if (error) {
         console.error('Failed to create collection link:', error)
-        return { success: false, error: 'リンクの作成に失敗しました' }
+        return { success: false, error: `リンクの作成に失敗しました: ${error.message}` }
     }
     
     const linkData = data as CollectionLink
