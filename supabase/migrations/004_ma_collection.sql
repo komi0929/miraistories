@@ -8,7 +8,7 @@
 CREATE TABLE IF NOT EXISTS ma_collection_links (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   token TEXT NOT NULL UNIQUE,              -- URLトークン（一意）
-  scenario_id UUID REFERENCES scenarios,   -- 紐づくシナリオ（任意）
+  scenario_id UUID,                        -- 紐づくシナリオID（任意、参照なし）
   owner_id UUID REFERENCES auth.users NOT NULL, -- 発行者（管理者）
   name TEXT,                               -- リンクの名前（任意）
   status TEXT CHECK (status IN ('pending', 'submitted', 'expired')) DEFAULT 'pending',
@@ -71,21 +71,17 @@ ALTER TABLE ma_collection_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ma_collection_respondents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ma_collection_responses ENABLE ROW LEVEL SECURITY;
 
--- ma_collection_links: 管理者のみ全操作可能
-CREATE POLICY "Admin full access ma_collection_links" ON ma_collection_links
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+-- ma_collection_links: 所有者のみ全操作可能
+CREATE POLICY "Owner full access ma_collection_links" ON ma_collection_links
+  FOR ALL USING (owner_id = auth.uid());
 
 -- ma_collection_links: 匿名ユーザーはトークンで参照のみ
 CREATE POLICY "Public read by token ma_collection_links" ON ma_collection_links
   FOR SELECT USING (true);
 
--- ma_collection_respondents: 管理者は全アクセス
-CREATE POLICY "Admin full access ma_collection_respondents" ON ma_collection_respondents
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+-- ma_collection_respondents: 認証ユーザーは全アクセス
+CREATE POLICY "Authenticated full access ma_collection_respondents" ON ma_collection_respondents
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
 -- ma_collection_respondents: 匿名ユーザーは挿入・更新可能（メール認証フロー）
 CREATE POLICY "Public insert ma_collection_respondents" ON ma_collection_respondents
@@ -97,11 +93,9 @@ CREATE POLICY "Public update own ma_collection_respondents" ON ma_collection_res
 CREATE POLICY "Public select ma_collection_respondents" ON ma_collection_respondents
   FOR SELECT USING (true);
 
--- ma_collection_responses: 管理者は全アクセス
-CREATE POLICY "Admin full access ma_collection_responses" ON ma_collection_responses
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+-- ma_collection_responses: 認証ユーザーは全アクセス
+CREATE POLICY "Authenticated full access ma_collection_responses" ON ma_collection_responses
+  FOR ALL USING (auth.uid() IS NOT NULL);
 
 -- ma_collection_responses: 匿名ユーザーは挿入・更新可能（条件入力フロー）
 CREATE POLICY "Public insert ma_collection_responses" ON ma_collection_responses
