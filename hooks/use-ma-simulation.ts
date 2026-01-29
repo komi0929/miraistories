@@ -106,8 +106,10 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
                 capacityAlertTriggered = true
             }
 
-            // Costs
-            const laborCost = data.laborCostTotal
+            // Costs - laborDetailsがあればそちらから合計、なければlaborCostTotalを使用
+            const laborCost = data.laborDetails && data.laborDetails.length > 0
+                ? data.laborDetails.reduce((sum, item) => sum + (item.amount || 0), 0)
+                : data.laborCostTotal || 0
             
             // Labor Ratio Check (Sales > 0 safe guard)
             if (totalMonthlySales > 0) {
@@ -134,15 +136,18 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
 
             const costOfGoods = totalMonthlySales * ((data.costRatio || 35) / 100)
             
-            // Fixed Costs
-            const leaseCost = data.leaseDetails.reduce((sum, item) => {
-                if (item.paymentRemainingMonths && month > item.paymentRemainingMonths) {
-                    return sum
-                }
-                return sum + item.amount
-            }, 0)
+            // Fixed Costs - leaseDetailsから計算（支払残月数を考慮）
+            const leaseCost = data.leaseDetails && data.leaseDetails.length > 0
+                ? data.leaseDetails.reduce((sum, item) => {
+                    if (item.paymentRemainingMonths && month > item.paymentRemainingMonths) {
+                        return sum
+                    }
+                    return sum + (item.amount || 0)
+                }, 0)
+                : data.otherExpensesTotal || 0  // leaseDetailsがなければotherExpensesTotalを使用
             
-            const otherFixed = data.rent + data.utilities + data.otherExpensesTotal + leaseCost
+            // Note: leaseDetailsがある場合はotherExpensesTotalを加算しない（重複防止）
+            const otherFixed = data.rent + data.utilities + leaseCost
             
             const totalExpenses = costOfGoods + laborCost + factoryFee + otherFixed
             const operatingProfit = totalMonthlySales - totalExpenses
