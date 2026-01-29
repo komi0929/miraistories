@@ -7,13 +7,14 @@ export interface ExpenseItem {
 }
 
 // 案件（積み上げ売上）
+// Note: 収集データと互換性を持たせるため、probability型を拡張
 export interface SalesDeal {
     id: string
     name: string
     monthlyAmount: number
     startMonth: number // 1~36
-    durationMonths: number
-    probability: 'high' | 'medium' | 'low' // 高:100%計算, 中:50%計算, 低:除外または重み付け
+    durationMonths?: number // オプショナル（未指定=永続）
+    probability: 'fixed' | 'high' | 'target' | 'medium' | 'low' // 収集側: fixed/high/target, 旧: high/medium/low
     isFactoryFeeTarget?: boolean // 委託工場フィー対象か（対象の場合、売上からフィーを差し引く）
 }
 
@@ -127,18 +128,26 @@ export function calculatePayback(data: SimulationData): SimulationResult {
 
             // 案件積み上げ
             for (const deal of data.deals) {
-                // 期間内かチェック
-                if (month >= deal.startMonth && month < deal.startMonth + deal.durationMonths) {
-                    // 確度フィルタ/重み付け
+                // 期間内かチェック（durationMonths未指定=永続）
+                const endMonth = deal.durationMonths ? deal.startMonth + deal.durationMonths : 999
+                if (month >= deal.startMonth && month < endMonth) {
+                    // 確度フィルタ/重み付け (新形式: fixed/high/target, 旧形式: high/medium/low)
                     let dealAmount = 0
                     if (data.probabilityFilter === 'all') {
-                        dealAmount = deal.monthlyAmount
+                        // target/low以外すべて
+                        if (deal.probability !== 'target' && deal.probability !== 'low') {
+                            dealAmount = deal.monthlyAmount
+                        }
                     } else if (data.probabilityFilter === 'high_only') {
-                        if (deal.probability === 'high') dealAmount = deal.monthlyAmount
+                        // fixed, high のみ (新形式対応)
+                        if (deal.probability === 'fixed' || deal.probability === 'high') {
+                            dealAmount = deal.monthlyAmount
+                        }
                     } else if (data.probabilityFilter === 'weighted') {
-                        if (deal.probability === 'high') dealAmount = deal.monthlyAmount * 1.0
+                        // 重み付け計算 (旧形式との互換性維持)
+                        if (deal.probability === 'fixed' || deal.probability === 'high') dealAmount = deal.monthlyAmount * 1.0
                         else if (deal.probability === 'medium') dealAmount = deal.monthlyAmount * 0.5
-                        else dealAmount = deal.monthlyAmount * 0.2
+                        else if (deal.probability === 'target' || deal.probability === 'low') dealAmount = deal.monthlyAmount * 0.2
                     }
                     monthlySales += dealAmount
                     
