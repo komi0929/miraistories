@@ -283,9 +283,11 @@ export async function getExistingResponse(linkId: string, respondentId: string) 
  * 収集データをSimulationData形式に変換（内部用）
  */
 function convertResponseToSimulationData(response: Partial<CollectionResponse>) {
+    // Note: desired_transfer_price は response オブジェクトに含まれる可能性がある
+    const anyResponse = response as any
     return {
         // 初期投資
-        acquisitionCost: 0, // desired_transfer_priceは別カラム
+        acquisitionCost: anyResponse.desired_transfer_price || 0, // 譲渡希望価格
         renovationCost: 0,
         skeletonCost: response.skeleton_cost || 3000000,
         
@@ -297,6 +299,9 @@ function convertResponseToSimulationData(response: Partial<CollectionResponse>) 
         laborDetails: response.labor_details || [],
         otherExpensesTotal: response.other_expenses_total || 0,
         leaseDetails: response.lease_details || [],
+        
+        // キャパシティ
+        maxCapacitySales: anyResponse.max_capacity_sales || 0,
         
         // 売上
         costRatio: response.cost_ratio || 35,

@@ -207,6 +207,9 @@ function convertResponseToSimulationData(response: any) {
         otherExpensesTotal: response.other_expenses_total || 0,
         leaseDetails: response.lease_details || [],
         
+        // キャパシティ
+        maxCapacitySales: response.max_capacity_sales || 0,
+        
         // 売上
         costRatio: response.cost_ratio || 35,
         salesStrategyMode: response.sales_strategy_mode || 'simple',
