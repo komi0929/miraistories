@@ -272,6 +272,8 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         
         if (result.success) {
             setIsSubmitted(true)
+        } else {
+            setError(result.message || '送信に失敗しました。再度お試しください。')
         }
         
         setIsSaving(false)
