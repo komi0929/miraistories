@@ -29,34 +29,24 @@ export type SimulationResult = {
 }
 
 // フォームデータの型定義（クライアントコンポーネントと同期）
+import { ExpenseItem, SalesDeal } from '@/types/ma-types'
+
 export interface InputData {
     desiredTransferPrice: number
     skeletonCost: number
     rent: number
     utilities: number
     laborCostTotal: number
-    laborDetails: any[]
+    laborDetails: ExpenseItem[]
     otherExpensesTotal: number
-    leaseDetails: {
-        id: string
-        amount: number
-        paymentRemainingMonths?: number
-        [key: string]: any
-    }[]
+    leaseDetails: (ExpenseItem & { paymentRemainingMonths?: number })[]
     useDetailedExpenses: boolean
     maxCapacitySales: number
     costRatio: number
     salesStrategyMode: 'simple' | 'detailed'
     monthlySalesSimple: number
     yearlySalesBaseline: { year1: number; year2: number; year3: number }
-    deals: {
-        id: string
-        monthlyAmount: number
-        startMonth: number
-        isFactoryFeeTarget: boolean
-        probability?: 'fixed' | 'high' | 'target'
-        [key: string]: any
-    }[]
+    deals: SalesDeal[]
     factoryFeePercentage: number
 }
 
