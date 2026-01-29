@@ -135,6 +135,9 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                 onChange={(val) => onChange(prev => ({ ...prev, rent: val }))}
                                 className="mt-1"
                             />
+                            <p className="text-xs text-slate-500 mt-1">
+                                ※ 親族や関連会社から賃借している場合は、相場家賃での再契約が必要になる可能性があります。
+                            </p>
                         </div>
 
                         {/* 固定項目: 光熱費 */}

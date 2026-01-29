@@ -176,7 +176,7 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
             alertMessages.push('⚠️ 売上が人員キャパシティを超過しています。追加採用または外注を検討してください。')
         }
         if (lowLaborCostAlertTriggered) {
-            alertMessages.push('⚠️ 人件費率が15%を下回っています。人員不足のリスクがあります。')
+            alertMessages.push('⚠️ 人件費率が15%を下回っています。未払い残業代等の労務リスク（簿外債務）の可能性があります。')
         }
 
         // Target Gap Calculation
