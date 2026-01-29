@@ -166,7 +166,9 @@ ${ADVISOR_PERSONA}
  */
 export async function saveSimulation(
     data: SimulationData,
-    title: string
+    title: string,
+    sourceLinkId?: string | null,
+    versionType?: 'original' | 'custom'
 ) {
     const supabase = await createClient() as any
     const { data: { user } } = await supabase.auth.getUser()
@@ -175,13 +177,31 @@ export async function saveSimulation(
         throw new Error('ログインが必要です')
     }
 
+    // version_numberを計算（source_link_idがある場合は既存版の最大値+1）
+    let versionNumber = 1
+    if (sourceLinkId) {
+        const { data: existing } = await supabase
+            .from('ma_simulations')
+            .select('version_number')
+            .eq('source_link_id', sourceLinkId)
+            .order('version_number', { ascending: false })
+            .limit(1)
+            .single()
+        if (existing) {
+            versionNumber = (existing.version_number || 0) + 1
+        }
+    }
+
     // 型定義が修正されたため、正しい型を使用
     const { error } = await supabase
         .from('ma_simulations')
         .insert({
             user_id: user.id,
             title: title || '無題のシミュレーション',
-            simulation_data: data as unknown as Json
+            simulation_data: data as unknown as Json,
+            source_link_id: sourceLinkId || null,
+            version_type: versionType || 'custom',
+            version_number: versionNumber
         })
 
     if (error) {

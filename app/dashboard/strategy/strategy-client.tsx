@@ -13,6 +13,8 @@ import { SalesStrategySection } from '@/components/dashboard/strategy/sales-stra
 import { FinancialChartsSection } from '@/components/dashboard/strategy/financial-charts-section'
 import { SimulationHistory } from '@/components/dashboard/strategy/simulation-history'
 import { CollectionLinkDialog } from '@/components/dashboard/strategy/collection-link-dialog'
+import { getSubmittedCollection, getSimulationsByLink } from './collection/actions'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export function StrategyClient() {
     // 入力データ（初期値）
@@ -48,6 +50,48 @@ export function StrategyClient() {
 
     // 計算結果
     const [result, setResult] = useState<SimulationResult | null>(null)
+
+    // 送信済み案件とシミュレーション版
+    const [submittedLink, setSubmittedLink] = useState<{ id: string; name: string | null } | null>(null)
+    const [simulationVersions, setSimulationVersions] = useState<Array<{
+        id: string
+        title: string
+        version_type: 'original' | 'custom'
+        version_number: number
+        simulation_data: SimulationData
+    }>>([])
+    const [selectedVersionId, setSelectedVersionId] = useState<string>('')
+
+    // 送信済み案件を取得
+    useEffect(() => {
+        const fetchSubmitted = async () => {
+            const res = await getSubmittedCollection()
+            if (res.success && res.data) {
+                setSubmittedLink({ id: res.data.link.id, name: res.data.link.name })
+                // 版一覧を取得
+                const versionsRes = await getSimulationsByLink(res.data.link.id)
+                if (versionsRes.success && versionsRes.data.length > 0) {
+                    setSimulationVersions(versionsRes.data)
+                    // オリジナル版があればデフォルト選択
+                    const original = versionsRes.data.find((v: { version_type: string }) => v.version_type === 'original')
+                    if (original) {
+                        setSelectedVersionId(original.id)
+                        setData(original.simulation_data)
+                    }
+                }
+            }
+        }
+        fetchSubmitted()
+    }, [])
+
+    // 版切替時にデータを更新
+    const handleVersionChange = (versionId: string) => {
+        const version = simulationVersions.find(v => v.id === versionId)
+        if (version) {
+            setSelectedVersionId(versionId)
+            setData(version.simulation_data)
+        }
+    }
 
     // 履歴ロードハンドラ
     const handleHistoryLoad = (loadedData: SimulationData) => {
@@ -115,6 +159,41 @@ export function StrategyClient() {
                     <SimulationHistory data={data} onLoad={handleHistoryLoad} />
                 </div>
             </div>
+
+            {/* 案件ステータス＆版切替 */}
+            {submittedLink && (
+                <Card className="border-green-200 bg-green-50">
+                    <CardContent className="py-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">✅</span>
+                                <div>
+                                    <p className="font-semibold text-green-800">申請受領済み</p>
+                                    <p className="text-sm text-green-700">{submittedLink.name || '案件データ'}</p>
+                                </div>
+                            </div>
+                            {simulationVersions.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-slate-600">シミュレーション版:</span>
+                                    <Select value={selectedVersionId} onValueChange={handleVersionChange}>
+                                        <SelectTrigger className="w-[240px] bg-white">
+                                            <SelectValue placeholder="版を選択" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {simulationVersions.map(v => (
+                                                <SelectItem key={v.id} value={v.id}>
+                                                    {v.version_type === 'original' ? '📥 ' : '📝 '}
+                                                    Ver.{v.version_number}: {v.title.replace('📥 オリジナル: ', '').replace('📥 ', '')}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 左カラム：入力フォーム */}

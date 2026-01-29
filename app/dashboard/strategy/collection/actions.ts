@@ -141,3 +141,149 @@ export async function updateLinkStatus(linkId: string, status: 'pending' | 'subm
     revalidatePath('/dashboard/strategy')
     return { success: true }
 }
+
+/**
+ * 送信済み案件のデータを取得（最新1件）
+ */
+export async function getSubmittedCollection() {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return { success: false, error: '認証が必要です', data: null }
+    }
+    
+    // 送信済みのリンクを取得（最新1件）
+    const { data: link, error: linkError } = await (supabase as any)
+        .from('ma_collection_links')
+        .select('*')
+        .eq('owner_id', user.id)
+        .eq('status', 'submitted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+    
+    if (linkError || !link) {
+        return { success: false, error: '送信済みの案件がありません', data: null }
+    }
+    
+    // 対応するレスポンスを取得
+    const { data: response, error: responseError } = await (supabase as any)
+        .from('ma_collection_responses')
+        .select('*')
+        .eq('link_id', link.id)
+        .eq('is_draft', false)
+        .single()
+    
+    if (responseError || !response) {
+        return { success: false, error: '回答データがありません', data: null }
+    }
+    
+    return { 
+        success: true, 
+        data: {
+            link,
+            response
+        }
+    }
+}
+
+/**
+ * 収集データをSimulationData形式に変換（内部用）
+ */
+function convertResponseToSimulationData(response: any) {
+    return {
+        // 初期投資
+        acquisitionCost: response.desired_transfer_price || 0,
+        renovationCost: 0,
+        skeletonCost: response.skeleton_cost || 3000000,
+        
+        // 販管費
+        useDetailedExpenses: response.use_detailed_expenses || false,
+        rent: response.rent || 0,
+        utilities: response.utilities || 0,
+        laborCostTotal: response.labor_cost_total || 0,
+        laborDetails: response.labor_details || [],
+        otherExpensesTotal: response.other_expenses_total || 0,
+        leaseDetails: response.lease_details || [],
+        
+        // 売上
+        costRatio: response.cost_ratio || 35,
+        salesStrategyMode: response.sales_strategy_mode || 'simple',
+        monthlySalesSimple: response.monthly_sales_simple || 0,
+        yearlySalesBaseline: response.yearly_sales_baseline || { year1: 0, year2: 0, year3: 0 },
+        deals: response.deals || [],
+        
+        // フィルタ＆その他
+        probabilityFilter: 'high_only' as const,
+        factoryFeePercentage: response.factory_fee_percentage || 0,
+    }
+}
+
+/**
+ * オリジナル版シミュレーションを自動作成
+ */
+export async function createOriginalSimulation(linkId: string, responseData: any) {
+    const supabase = await createClient()
+    
+    // リンク情報取得（owner_id確認用）
+    const { data: link } = await (supabase as any)
+        .from('ma_collection_links')
+        .select('owner_id, name')
+        .eq('id', linkId)
+        .single()
+    
+    if (!link) {
+        console.error('Link not found for original simulation')
+        return { success: false }
+    }
+    
+    // SimulationData形式に変換
+    const simulationData = convertResponseToSimulationData(responseData)
+    
+    // オリジナル版として保存
+    const { error } = await (supabase as any)
+        .from('ma_simulations')
+        .insert({
+            user_id: link.owner_id,
+            title: `📥 オリジナル: ${link.name || '申請データ'}`,
+            simulation_data: simulationData,
+            source_link_id: linkId,
+            version_type: 'original',
+            version_number: 1
+        })
+    
+    if (error) {
+        console.error('Failed to create original simulation:', error)
+        return { success: false }
+    }
+    
+    revalidatePath('/dashboard/strategy')
+    return { success: true }
+}
+
+/**
+ * 対象リンクに紐づくシミュレーション版一覧を取得
+ */
+export async function getSimulationsByLink(linkId: string) {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return { success: false, error: '認証が必要です', data: [] }
+    }
+    
+    const { data, error } = await (supabase as any)
+        .from('ma_simulations')
+        .select('*')
+        .eq('source_link_id', linkId)
+        .eq('user_id', user.id)
+        .order('version_number', { ascending: true })
+    
+    if (error) {
+        console.error('Failed to get simulations by link:', error)
+        return { success: false, error: 'シミュレーションの取得に失敗しました', data: [] }
+    }
+    
+    return { success: true, data: data || [] }
+}

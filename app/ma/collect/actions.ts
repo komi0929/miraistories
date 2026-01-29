@@ -245,12 +245,15 @@ export async function saveResponse(
         }
     }
     
-    // 送信完了の場合はリンクステータスを更新
+    // 送信完了の場合はリンクステータスを更新＆オリジナル版を自動作成
     if (!isDraft) {
         await (supabase as any)
             .from('ma_collection_links')
             .update({ status: 'submitted' })
             .eq('id', linkId)
+        
+        // オリジナル版シミュレーションを自動作成
+        await createOriginalSimulationInternal(supabase, linkId, responseData)
     }
     
     return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }
@@ -275,3 +278,79 @@ export async function getExistingResponse(linkId: string, respondentId: string) 
     
     return { success: true, data: data as CollectionResponse }
 }
+
+/**
+ * 収集データをSimulationData形式に変換（内部用）
+ */
+function convertResponseToSimulationData(response: Partial<CollectionResponse>) {
+    return {
+        // 初期投資
+        acquisitionCost: 0, // desired_transfer_priceは別カラム
+        renovationCost: 0,
+        skeletonCost: response.skeleton_cost || 3000000,
+        
+        // 販管費
+        useDetailedExpenses: response.use_detailed_expenses || false,
+        rent: response.rent || 0,
+        utilities: response.utilities || 0,
+        laborCostTotal: response.labor_cost_total || 0,
+        laborDetails: response.labor_details || [],
+        otherExpensesTotal: response.other_expenses_total || 0,
+        leaseDetails: response.lease_details || [],
+        
+        // 売上
+        costRatio: response.cost_ratio || 35,
+        salesStrategyMode: response.sales_strategy_mode || 'simple',
+        monthlySalesSimple: response.monthly_sales_simple || 0,
+        yearlySalesBaseline: response.yearly_sales_baseline || { year1: 0, year2: 0, year3: 0 },
+        deals: response.deals || [],
+        
+        // フィルタ＆その他
+        probabilityFilter: 'high_only' as const,
+        factoryFeePercentage: response.factory_fee_percentage || 0,
+    }
+}
+
+/**
+ * オリジナル版シミュレーションを作成（内部用 - supabaseクライアントを引数で受け取る）
+ */
+async function createOriginalSimulationInternal(
+    supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+    linkId: string, 
+    responseData: Partial<CollectionResponse>
+) {
+    // リンク情報取得
+    const { data: link } = await (supabase as any)
+        .from('ma_collection_links')
+        .select('owner_id, name')
+        .eq('id', linkId)
+        .single()
+    
+    if (!link) {
+        console.error('Link not found for original simulation')
+        return { success: false }
+    }
+    
+    // SimulationData形式に変換
+    const simulationData = convertResponseToSimulationData(responseData)
+    
+    // オリジナル版として保存
+    const { error } = await (supabase as any)
+        .from('ma_simulations')
+        .insert({
+            user_id: link.owner_id,
+            title: `📥 オリジナル: ${link.name || '申請データ'}`,
+            simulation_data: simulationData,
+            source_link_id: linkId,
+            version_type: 'original',
+            version_number: 1
+        })
+    
+    if (error) {
+        console.error('Failed to create original simulation:', error)
+        return { success: false }
+    }
+    
+    return { success: true }
+}
+
