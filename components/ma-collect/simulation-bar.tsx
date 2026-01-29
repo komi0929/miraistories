@@ -72,14 +72,14 @@ export function SimulationBar({
                                 <span className="text-xl font-bold text-red-700">回収不可（赤字）</span>
                             ) : isPaybackOk ? (
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-xl font-bold text-emerald-800">回収見込み: {yearsDisplay}年</span>
+                                    <span className="text-xl font-bold text-emerald-800">回収見込み(税引前): {yearsDisplay}年</span>
                                     <span className="text-sm font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
                                         基準クリア
                                     </span>
                                 </div>
                             ) : (
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-xl font-bold text-amber-700">未達 ({yearsDisplay}年)</span>
+                                    <span className="text-xl font-bold text-amber-700">未達(税引前) {yearsDisplay}年</span>
                                 </div>
                             )}
                         </div>
@@ -89,11 +89,15 @@ export function SimulationBar({
                 {/* 右側: アクションガイド */}
                 <div className="w-full sm:w-auto text-center sm:text-right bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
                     {isPaybackOk ? (
-                        <div className="space-y-1">
-                            <div className="text-xs text-emerald-700 font-medium">3年間の累積利益予測</div>
-                            <div className="text-2xl font-bold text-emerald-600 font-mono tracking-tight">
+                        <div>
+                            <p className="text-xs text-slate-500 font-medium">3年間の償却前利益(EBITDA)</p>
+                            <p className={cn(
+                                "text-lg font-bold font-mono tracking-tight",
+                                cumulativeOperatingProfit >= 0 ? "text-slate-900" : "text-red-600"
+                            )}>
                                 +¥{Math.floor(cumulativeOperatingProfit).toLocaleString()}
-                            </div>
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">※税引前・手数料目安</p>
                         </div>
                     ) : !isProfitable ? (
                         <div className="space-y-1">

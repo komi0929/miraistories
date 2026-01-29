@@ -465,6 +465,11 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 {/* 送信ボタン */}
                 <Card className="border-blue-200 bg-blue-50">
                     <CardContent className="pt-6">
+                        <div className="mb-4 p-3 bg-white/60 rounded border border-blue-100 text-xs text-slate-500">
+                            <strong>※シミュレーションに関するご注意</strong><br />
+                            表示される回収期間や利益額は、税引前・償却前・仲介手数料抜きの概算値です。
+                            実際の投資判断においては、税理士等の専門家にご相談の上、詳細な収支計画を作成することをお勧めします。
+                        </div>
                         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                             <div className="text-sm text-blue-700">
                                 入力が完了しましたら、送信ボタンを押してください。<br />
