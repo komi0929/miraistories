@@ -15,16 +15,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-
-interface SalesDeal {
-    id: string
-    name: string
-    monthlyAmount: number
-    startMonth: number
-    // durationMonths: removed (assumed permanent)
-    probability: 'fixed' | 'high' | 'target'
-    isFactoryFeeTarget: boolean
-}
+import { SalesDeal } from '@/types/ma-types'
 
 interface SalesSectionCollectProps {
     data: {

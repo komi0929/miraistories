@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { ExpenseItem, SalesDeal } from '@/types/ma-types'
 
 // 型定義
 interface CollectionLink {
@@ -11,35 +12,26 @@ interface CollectionLink {
     expires_at: string | null
 }
 
-interface CollectionRespondent {
-    id: string
-    link_id: string
-    email: string
-    verification_code: string | null
-    verified: boolean
-    verified_at: string | null
-}
-
 interface CollectionResponse {
     id: string
     link_id: string
     respondent_id: string
     is_draft: boolean
-    desired_transfer_price: number  // 追加: 譲渡希望価格
-    max_capacity_sales: number      // 追加: キャパシティ上限
+    desired_transfer_price: number
+    max_capacity_sales: number
     skeleton_cost: number
     rent: number
     utilities: number
     labor_cost_total: number
-    labor_details: any[]
+    labor_details: ExpenseItem[]
     other_expenses_total: number
-    lease_details: any[]
+    lease_details: ExpenseItem[]
     use_detailed_expenses: boolean
     cost_ratio: number
     sales_strategy_mode: 'simple' | 'detailed'
     monthly_sales_simple: number
     yearly_sales_baseline: { year1: number; year2: number; year3: number }
-    deals: any[]
+    deals: SalesDeal[]
     factory_fee_percentage: number
     supplemental_info?: string | null
 }

@@ -21,6 +21,7 @@ import { Mail, KeyRound, Save, Send, CheckCircle, Loader2 } from 'lucide-react'
 import { useMaSimulation } from '@/hooks/use-ma-simulation'
 import { SimulationBar } from '@/components/ma-collect/simulation-bar'
 import { ConfirmDialog } from '@/components/ma-collect/confirm-dialog'
+import { SalesDeal, ExpenseItem } from '@/types/ma-types'
 
 interface CollectFormClientProps {
     token: string
@@ -34,16 +35,16 @@ const initialFormData = {
     rent: 0,
     utilities: 0,
     laborCostTotal: 0,
-    laborDetails: [] as { id: string; name: string; amount: number }[],
+    laborDetails: [] as ExpenseItem[],
     otherExpensesTotal: 0,
-    leaseDetails: [] as { id: string; name: string; amount: number; paymentRemainingMonths?: number }[],
+    leaseDetails: [] as ExpenseItem[],
     useDetailedExpenses: true,
     maxCapacitySales: 0, // 人員キャパシティ
     costRatio: 35,
     salesStrategyMode: 'simple' as 'simple' | 'detailed',
     monthlySalesSimple: 0,
     yearlySalesBaseline: { year1: 0, year2: 0, year3: 0 },
-    deals: [] as any[],
+    deals: [] as SalesDeal[],
     factoryFeePercentage: 0
 }
 
@@ -100,7 +101,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             }
 
             setFormData({
-                desiredTransferPrice: (d as any).desired_transfer_price || 0,
+                desiredTransferPrice: d.desired_transfer_price || 0,
                 skeletonCost: d.skeleton_cost || 3000000,
                 rent: d.rent || 0,
                 utilities: d.utilities || 0,
@@ -109,7 +110,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 otherExpensesTotal: d.other_expenses_total || 0,
                 leaseDetails: loadedLeaseDetails,
                 useDetailedExpenses: true, // 常に詳細モードON
-                maxCapacitySales: (d as any).max_capacity_sales || 0,
+                maxCapacitySales: d.max_capacity_sales || 0,
                 costRatio: d.cost_ratio || 35,
                 salesStrategyMode: d.sales_strategy_mode || 'simple',
                 monthlySalesSimple: d.monthly_sales_simple || 0,
@@ -122,19 +123,20 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
     
     // セッション復元（localStorage）
     useEffect(() => {
-        const savedEmail = localStorage.getItem(`ma_collect_${token}_email`)
-        if (savedEmail) {
-            setEmail(savedEmail)
-            // 認証状態を確認
-            checkRespondentAuth(linkId, savedEmail).then(result => {
+        const restoreSession = async () => {
+            const savedEmail = localStorage.getItem(`ma_collect_${token}_email`)
+            if (savedEmail) {
+                const result = await checkRespondentAuth(linkId, savedEmail)
                 if (result.authenticated && result.respondentId) {
+                    setEmail(savedEmail)
                     setRespondentId(result.respondentId)
                     setAuthStep('authenticated')
-                    // 既存データを取得
                     loadExistingData(result.respondentId)
                 }
-            })
+            }
         }
+        restoreSession()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token, linkId])
     
     // メール送信
