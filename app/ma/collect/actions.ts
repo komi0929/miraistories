@@ -25,6 +25,8 @@ interface CollectionResponse {
     link_id: string
     respondent_id: string
     is_draft: boolean
+    desired_transfer_price: number  // 追加: 譲渡希望価格
+    max_capacity_sales: number      // 追加: キャパシティ上限
     skeleton_cost: number
     rent: number
     utilities: number
@@ -39,7 +41,7 @@ interface CollectionResponse {
     yearly_sales_baseline: { year1: number; year2: number; year3: number }
     deals: any[]
     factory_fee_percentage: number
-    supplemental_info?: string | null // 追加
+    supplemental_info?: string | null
 }
 
 /**

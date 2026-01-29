@@ -267,7 +267,7 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             yearly_sales_baseline: formData.yearlySalesBaseline,
             deals: formData.deals,
             factory_fee_percentage: formData.factoryFeePercentage,
-            supplemental_info: supplementalInfo // 追加
+            supplemental_info: supplementalInfo || null
         } as any, false)
         
         if (result.success) {
