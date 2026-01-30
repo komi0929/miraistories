@@ -201,9 +201,10 @@ export async function saveResponse(
         
         console.log('[saveResponse] Success')
         return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }
-    } catch (e) {
+    } catch (e: any) {
         console.error('[saveResponse] Unexpected error:', e)
-        return { success: false, message: 'サーバーエラーが発生しました' }
+        const errorMessage = e instanceof Error ? e.message : (typeof e === 'string' ? e : '不明なエラー')
+        return { success: false, message: `サーバーエラーが発生しました: ${errorMessage}` }
     }
 }
 

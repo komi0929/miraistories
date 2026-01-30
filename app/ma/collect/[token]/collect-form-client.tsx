@@ -190,6 +190,9 @@ export function CollectFormClient({ token: _token, linkId }: CollectFormClientPr
         if (result.success) {
             setLastSaved(new Date())
             setShowDraftModal(true) // モーダル表示
+        } else {
+            setError(result.message || '下書き保存に失敗しました')
+            // 自動的に消えるトーストなどで通知するのが望ましいが、既存のerror表示エリアを利用
         }
         
         setIsSaving(false)
