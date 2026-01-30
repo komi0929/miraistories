@@ -85,32 +85,6 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
     return (
         <TooltipProvider>
             <div className="space-y-6">
-                {/* 譲渡希望価格 */}
-                <Card className="border-emerald-100 bg-emerald-50/50">
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <CardTitle className="text-base text-emerald-900">譲渡希望価格（税込）</CardTitle>
-                            <Tooltip>
-                                <TooltipTrigger>
-                                    <HelpCircle className="w-4 h-4 text-emerald-600" />
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs">
-                                    <p>M&Aで希望する売却価格を入力してください。この金額を3年以内に回収できるかが判定基準となります。</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <CurrencyInput
-                            value={data.desiredTransferPrice}
-                            onChange={(val) => onChange(prev => ({ ...prev, desiredTransferPrice: val }))}
-                            className="text-lg font-bold text-emerald-700 h-12"
-                        />
-                         <p className="text-xs text-emerald-600 mt-2">
-                            ※在庫資産や営業権（のれん）を含めた総額イメージをご入力ください
-                        </p>
-                    </CardContent>
-                </Card>
 
                 <Card>
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">

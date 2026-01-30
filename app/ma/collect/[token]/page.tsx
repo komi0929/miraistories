@@ -1,5 +1,4 @@
 import { getLinkByToken } from '../actions'
-import { redirect } from 'next/navigation'
 import { CollectFormClient } from './collect-form-client'
 
 interface PageProps {
@@ -28,23 +27,7 @@ export default async function CollectPage({ params }: PageProps) {
         )
     }
     
-    // 既に送信済みの場合
-    if (result.data?.status === 'submitted') {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-                    <div className="text-6xl mb-4">✅</div>
-                    <h1 className="text-xl font-bold text-slate-900 mb-2">
-                        ご入力ありがとうございました
-                    </h1>
-                    <p className="text-slate-600">
-                        条件のご入力は既に完了しています。<br />
-                        ご不明点がございましたら、担当者までお問い合わせください。
-                    </p>
-                </div>
-            </div>
-        )
-    }
+    // 送信済みでもフォームクライアントに誘導（認証後に読み取り専用モードで表示）
     
     return <CollectFormClient token={token} linkId={result.data!.id} />
 }

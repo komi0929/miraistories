@@ -51,7 +51,7 @@ const initialFormData = {
 
 type FormData = typeof initialFormData
 
-export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
+export function CollectFormClient({ token: _token, linkId }: CollectFormClientProps) {
     // 認証ステート（シンプル化: コード入力のみ）
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [authCode, setAuthCode] = useState('')

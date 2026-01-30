@@ -119,8 +119,8 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
                     return sum
                 }, 0)
                 
-                const totalFeeTargetSales = currentBaseline + dealsFeeTargetSales
-                factoryFee = totalFeeTargetSales * (data.factoryFeePercentage / 100)
+                // baselineは既存売上なのでフィー対象にしない。対象案件のみにフィーを課す
+                factoryFee = dealsFeeTargetSales * (data.factoryFeePercentage / 100)
             }
             cumulativeFactoryFee += factoryFee
 
@@ -163,7 +163,7 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
 
         const isPaybackOk = paybackMonths !== null
         const totalOperatingProfit = cumulativeProfit
-        const paybackYears = paybackMonths ? parseFloat((paybackMonths / 12).toFixed(1)) : 99.9
+        const paybackYears = paybackMonths ? parseFloat((paybackMonths / 12).toFixed(1)) : Infinity
 
         // Summary Statistics
         const totalSales = cumulativeSales
