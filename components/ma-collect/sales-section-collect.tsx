@@ -185,22 +185,20 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                     </div>
                                                 </div>
                                                 
-                                                {/* 委託工場フィー対象チェック */}
-                                                {data.factoryFeePercentage > 0 && (
-                                                    <div className="flex items-center space-x-2 pt-2 border-t">
-                                                        <Checkbox
-                                                            id={`factory-fee-${deal.id}`}
-                                                            checked={deal.isFactoryFeeTarget}
-                                                            onCheckedChange={(checked) => handleDealChange(deal.id, 'isFactoryFeeTarget', !!checked)}
-                                                        />
-                                                        <Label 
-                                                            htmlFor={`factory-fee-${deal.id}`}
-                                                            className="text-xs text-slate-600 cursor-pointer"
-                                                        >
-                                                            この案件は委託工場フィーの対象にする
-                                                        </Label>
-                                                    </div>
-                                                )}
+                                                {/* 委託工場フィー対象チェック - 常に表示 */}
+                                                <div className="flex items-center space-x-2 pt-2 border-t">
+                                                    <Checkbox
+                                                        id={`factory-fee-${deal.id}`}
+                                                        checked={deal.isFactoryFeeTarget}
+                                                        onCheckedChange={(checked) => handleDealChange(deal.id, 'isFactoryFeeTarget', !!checked)}
+                                                    />
+                                                    <Label 
+                                                        htmlFor={`factory-fee-${deal.id}`}
+                                                        className="text-xs text-slate-600 cursor-pointer"
+                                                    >
+                                                        この案件は委託工場フィーの対象にする
+                                                    </Label>
+                                                </div>
 
                                                 {deal.probability === 'target' && (
                                                     <p className="text-[10px] text-slate-400 text-right">
