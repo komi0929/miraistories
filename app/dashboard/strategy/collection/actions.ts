@@ -222,32 +222,32 @@ export async function getSubmittedCollection() {
 function convertResponseToSimulationData(response: any) {
     return {
         // 初期投資
-        acquisitionCost: response.desired_transfer_price || 0,
+        acquisitionCost: response.desired_transfer_price ?? response.desiredTransferPrice ?? 0,
         renovationCost: 0,
-        skeletonCost: response.skeleton_cost || 3000000,
+        skeletonCost: response.skeleton_cost ?? response.skeletonCost ?? 3000000,
         
         // 販管費
-        useDetailedExpenses: response.use_detailed_expenses || false,
-        rent: response.rent || 0,
-        utilities: response.utilities || 0,
-        laborCostTotal: response.labor_cost_total || 0,
-        laborDetails: response.labor_details || [],
-        otherExpensesTotal: response.other_expenses_total || 0,
-        leaseDetails: response.lease_details || [],
+        useDetailedExpenses: response.use_detailed_expenses ?? response.useDetailedExpenses ?? false,
+        rent: response.rent ?? 0,
+        utilities: response.utilities ?? 0,
+        laborCostTotal: response.labor_cost_total ?? response.laborCostTotal ?? 0,
+        laborDetails: response.labor_details ?? response.laborDetails ?? [],
+        otherExpensesTotal: response.other_expenses_total ?? response.otherExpensesTotal ?? 0,
+        leaseDetails: response.lease_details ?? response.leaseDetails ?? [],
         
         // キャパシティ
-        maxCapacitySales: response.max_capacity_sales || 0,
+        maxCapacitySales: response.max_capacity_sales ?? response.maxCapacitySales ?? 0,
         
         // 売上
-        costRatio: response.cost_ratio || 35,
-        salesStrategyMode: response.sales_strategy_mode || 'simple',
-        monthlySalesSimple: response.monthly_sales_simple || 0,
-        yearlySalesBaseline: response.yearly_sales_baseline || { year1: 0, year2: 0, year3: 0 },
-        deals: response.deals || [],
+        costRatio: response.cost_ratio ?? response.costRatio ?? 35,
+        salesStrategyMode: response.sales_strategy_mode ?? response.salesStrategyMode ?? 'simple',
+        monthlySalesSimple: response.monthly_sales_simple ?? response.monthlySalesSimple ?? 0,
+        yearlySalesBaseline: response.yearly_sales_baseline ?? response.yearlySalesBaseline ?? { year1: 0, year2: 0, year3: 0 },
+        deals: response.deals ?? [],
         
         // フィルタ＆その他
         probabilityFilter: 'high_only' as const,
-        factoryFeePercentage: response.factory_fee_percentage || 0,
+        factoryFeePercentage: response.factory_fee_percentage ?? response.factoryFeePercentage ?? 0,
     }
 }
 

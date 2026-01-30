@@ -97,7 +97,7 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
             }
 
             // Costs - laborDetailsがあればそちらから合計、なければlaborCostTotalを使用
-            const laborCost = data.laborDetails && data.laborDetails.length > 0
+            const laborCost = data.useDetailedExpenses && data.laborDetails.length > 0
                 ? data.laborDetails.reduce((sum, item) => sum + (item.amount || 0), 0)
                 : data.laborCostTotal || 0
             
@@ -127,14 +127,14 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
             const costOfGoods = totalMonthlySales * ((data.costRatio || 35) / 100)
             
             // Fixed Costs - leaseDetailsから計算（支払残月数を考慮）
-            const leaseCost = data.leaseDetails && data.leaseDetails.length > 0
+            const leaseCost = data.useDetailedExpenses && data.leaseDetails.length > 0
                 ? data.leaseDetails.reduce((sum, item) => {
                     if (item.paymentRemainingMonths && month > item.paymentRemainingMonths) {
                         return sum
                     }
                     return sum + (item.amount || 0)
                 }, 0)
-                : data.otherExpensesTotal || 0  // leaseDetailsがなければotherExpensesTotalを使用
+                : data.otherExpensesTotal || 0  // useDetailedExpensesがfalseならotherExpensesTotalを使用
             
             // Note: leaseDetailsがある場合はotherExpensesTotalを加算しない（重複防止）
             const otherFixed = data.rent + data.utilities + leaseCost
@@ -234,6 +234,7 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
         data.laborDetails,
         data.otherExpensesTotal,
         data.leaseDetails,
+        data.useDetailedExpenses,
         data.maxCapacitySales,
         data.costRatio,
         data.salesStrategyMode,
