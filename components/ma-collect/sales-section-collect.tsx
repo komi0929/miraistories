@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, Trash2, TrendingUp, HelpCircle } from 'lucide-react'
+import { Plus, Trash2, HelpCircle } from 'lucide-react'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
 import {
     Tooltip,
@@ -26,6 +25,7 @@ interface SalesSectionCollectProps {
         deals: SalesDeal[]
         factoryFeePercentage: number
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onChange: (fn: (prev: any) => any) => void
 }
 
@@ -37,7 +37,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
             monthlyAmount: 300000,
             startMonth: 1,
             probability: 'high', // Default to High
-            isFactoryFeeTarget: true // Default to True
+            isFactoryFeeTarget: false // Default to False - user must opt-in
         }
         onChange(prev => ({ ...prev, deals: [...prev.deals, newDeal] }))
     }
@@ -46,6 +46,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
         onChange(prev => ({ ...prev, deals: prev.deals.filter((d: SalesDeal) => d.id !== id) }))
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleDealChange = (id: string, field: keyof SalesDeal, value: any) => {
         const newDeals = data.deals.map(deal => {
             if (deal.id === id) {
@@ -56,14 +57,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
         onChange(prev => ({ ...prev, deals: newDeals }))
     }
 
-    const getProbabilityLabel = (prob: string) => {
-        switch (prob) {
-            case 'fixed': return '確定・契約済'
-            case 'high': return '見込み・高'
-            case 'target': return '追加目標(未定)'
-            default: return prob
-        }
-    }
+
 
     return (
         <TooltipProvider>
@@ -143,7 +137,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                     />
                                                     <Select
                                                         value={deal.probability}
-                                                        onValueChange={(val) => handleDealChange(deal.id, 'probability', val)}
+                                                        onValueChange={(val) => handleDealChange(deal.id, 'probability', val as 'fixed' | 'high' | 'target')}
                                                     >
                                                         <SelectTrigger className={`w-36 h-8 text-xs font-medium border-none ring-1 ring-inset ${
                                                             deal.probability === 'fixed' ? 'text-blue-700 bg-blue-100 ring-blue-300' :
@@ -197,7 +191,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                         <Checkbox
                                                             id={`factory-fee-${deal.id}`}
                                                             checked={deal.isFactoryFeeTarget}
-                                                            onCheckedChange={(checked) => handleDealChange(deal.id, 'isFactoryFeeTarget', checked)}
+                                                            onCheckedChange={(checked) => handleDealChange(deal.id, 'isFactoryFeeTarget', !!checked)}
                                                         />
                                                         <Label 
                                                             htmlFor={`factory-fee-${deal.id}`}

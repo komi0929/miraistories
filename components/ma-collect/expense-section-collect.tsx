@@ -22,7 +22,6 @@ interface ExpenseItem {
 
 interface ExpenseSectionCollectProps {
     data: {
-        desiredTransferPrice: number // 譲渡希望価格
         rent: number
         utilities: number
         laborCostTotal: number
@@ -30,8 +29,9 @@ interface ExpenseSectionCollectProps {
         otherExpensesTotal: number
         leaseDetails: ExpenseItem[]
         useDetailedExpenses: boolean
-        maxCapacitySales: number // キャパシティ上限
+        maxCapacitySales: number
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onChange: (fn: (prev: any) => any) => void
 }
 
@@ -220,6 +220,7 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                             value={item.paymentRemainingMonths || ''}
                                             onChange={(e) => {
                                                 const val = e.target.value ? parseInt(e.target.value) : undefined
+                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                 handleDetailChange('lease', item.id, 'paymentRemainingMonths', val as any)
                                             }}
                                             placeholder="∞"

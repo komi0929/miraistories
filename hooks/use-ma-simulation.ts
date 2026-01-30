@@ -234,7 +234,6 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
         data.laborDetails,
         data.otherExpensesTotal,
         data.leaseDetails,
-        data.useDetailedExpenses,
         data.maxCapacitySales,
         data.costRatio,
         data.salesStrategyMode,
