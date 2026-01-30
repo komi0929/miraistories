@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +24,7 @@ export function StrategyClient() {
     const [viewMode, setViewMode] = useState<'list' | 'simulation'>('list')
     const [collectionLinks, setCollectionLinks] = useState<CollectionLink[]>([])
     const [isLoadingLinks, setIsLoadingLinks] = useState(true)
+    const { toast } = useToast()
 
     // 入力データ（初期値）
     const [data, setData] = useState<SimulationData>({
@@ -75,6 +77,14 @@ export function StrategyClient() {
         const res = await getCollectionLinks()
         if (res.success && res.data) {
             setCollectionLinks(res.data as CollectionLink[])
+        } else {
+            console.error('fetchLinks error:', res.error)
+            toast({
+                title: "データ取得エラー",
+                description: res.error || "案件一覧の取得に失敗しました。管理者に連絡してください。",
+                variant: "destructive"
+            })
+            setCollectionLinks([])
         }
         setIsLoadingLinks(false)
     }
