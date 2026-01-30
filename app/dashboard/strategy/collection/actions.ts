@@ -290,3 +290,56 @@ export async function getSimulationsByLink(linkId: string) {
     
     return { success: true, data: data || [] }
 }
+
+/**
+ * [DEBUG] 全データのリセット（申請リセット＆リンク再アクティブ化）
+ */
+export async function resetAllCollectionData() {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return { success: false, error: '認証が必要です' }
+    }
+
+    // 1. ユーザー所有のリンクを取得
+    const { data: links } = await (supabase as any)
+        .from('ma_collection_links')
+        .select('id')
+        .eq('owner_id', user.id)
+    
+    if (!links || links.length === 0) {
+        return { success: true, message: 'データはありませんでした' }
+    }
+
+    const linkIds = links.map((l: any) => l.id)
+
+    // 2. 関連データの削除
+    // Simulation (original)
+    await (supabase as any)
+        .from('ma_simulations')
+        .delete()
+        .in('source_link_id', linkIds)
+        .eq('version_type', 'original')
+
+    // Responses
+    await (supabase as any)
+        .from('ma_collection_responses')
+        .delete()
+        .in('link_id', linkIds)
+
+    // Respondents (認証もリセットする場合)
+    await (supabase as any)
+        .from('ma_collection_respondents')
+        .delete()
+        .in('link_id', linkIds)
+
+    // 3. リンクステータスをpendingに戻す
+    await (supabase as any)
+        .from('ma_collection_links')
+        .update({ status: 'pending' })
+        .in('id', linkIds)
+
+    revalidatePath('/dashboard/strategy')
+    return { success: true, message: '全ての収集データをリセットしました' }
+}
