@@ -1,4 +1,5 @@
 import { StrategyClient } from './strategy-client'
+import { ResetButton } from '@/components/dashboard/strategy/reset-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,18 +11,8 @@ export default function StrategyPage() {
     return (
         <div className="relative">
              <StrategyClient />
-             <form action={async () => {
-                 'use server'
-                 const { resetAllCollectionData } = await import('./collection/actions')
-                 await resetAllCollectionData()
-             }}>
-                 <button 
-                    type="submit"
-                    className="fixed bottom-4 left-4 z-50 bg-red-600 text-white px-4 py-2 rounded shadow-lg text-xs hover:bg-red-700 transition-colors"
-                >
-                    [DEBUG] 収集データリセット
-                 </button>
-             </form>
+             <StrategyClient />
+             <ResetButton />
         </div>
     )
 }

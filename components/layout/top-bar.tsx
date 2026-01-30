@@ -2,7 +2,7 @@
 
 import { PokerFaceToggle } from '@/components/shared/poker-face-toggle'
 import { Button } from '@/components/ui/button'
-import { LogOut, Bell } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { User } from '@supabase/supabase-js'
 
 interface TopBarProps {
@@ -20,18 +20,6 @@ export function TopBar({ user }: TopBarProps) {
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-4">
-                    {/* Notifications */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="relative"
-                        title="通知"
-                    >
-                        <Bell className="h-5 w-5 text-slate-600" />
-                        {/* Notification badge */}
-                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
-                    </Button>
-
                     {/* Poker Face Mode */}
                     <PokerFaceToggle />
 
