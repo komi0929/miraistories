@@ -74,7 +74,8 @@ export async function getCollectionLinks() {
         return { success: false, error: '認証が必要です', data: [] }
     }
     
-    const { data, error } = await (supabase as any)
+    // 1. リンクとレスポンスを取得
+    const { data: linksData, error: linksError } = await (supabase as any)
         .from('ma_collection_links')
         .select(`
             *,
@@ -87,12 +88,39 @@ export async function getCollectionLinks() {
         .eq('owner_id', user.id)
         .order('created_at', { ascending: false })
     
-    if (error) {
-        console.error('Failed to get collection links:', error)
+    if (linksError) {
+        console.error('Failed to get collection links:', linksError)
         return { success: false, error: 'リンクの取得に失敗しました', data: [] }
     }
+
+    if (!linksData || linksData.length === 0) {
+        return { success: true, data: [] }
+    }
+
+    // 2. 関連するシミュレーションを取得
+    const linkIds = linksData.map((l: any) => l.id)
+    const { data: simulationsData, error: simsError } = await (supabase as any)
+        .from('ma_simulations')
+        .select('id, title, version_type, version_number, check_result, created_at, source_link_id')
+        .in('source_link_id', linkIds)
+        .eq('user_id', user.id)
+        .order('version_number', { ascending: true })
+
+    if (simsError) {
+        console.warn('Failed to get related simulations:', simsError)
+        // シミュレーション取得失敗は致命的ではないので続行
+    }
+
+    // 3. データを結合
+    const combinedData = linksData.map((link: any) => {
+        const relatedSims = simulationsData?.filter((s: any) => s.source_link_id === link.id) || []
+        return {
+            ...link,
+            simulations: relatedSims
+        }
+    })
     
-    return { success: true, data: data || [] }
+    return { success: true, data: combinedData }
 }
 
 /**

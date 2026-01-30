@@ -13,10 +13,17 @@ import { SalesStrategySection } from '@/components/dashboard/strategy/sales-stra
 import { FinancialChartsSection } from '@/components/dashboard/strategy/financial-charts-section'
 import { SimulationHistory } from '@/components/dashboard/strategy/simulation-history'
 import { CollectionLinkDialog } from '@/components/dashboard/strategy/collection-link-dialog'
-import { getSubmittedCollection, getSimulationsByLink } from './collection/actions'
+import { getCollectionLinks, getSimulationsByLink } from './collection/actions'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CaseList, CollectionLink } from '@/components/dashboard/strategy/case-list'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
 
 export function StrategyClient() {
+    // 画面モード
+    const [viewMode, setViewMode] = useState<'list' | 'simulation'>('list')
+    const [collectionLinks, setCollectionLinks] = useState<CollectionLink[]>([])
+    const [isLoadingLinks, setIsLoadingLinks] = useState(true)
+
     // 入力データ（初期値）
     const [data, setData] = useState<SimulationData>({
         acquisitionCost: 5000000,
@@ -37,7 +44,7 @@ export function StrategyClient() {
         ],
 
         costRatio: 35,
-        salesStrategyMode: 'simple',
+        salesStrategyMode: 'detailed', // Default to detailed based on previous requirements
         monthlySalesSimple: 1200000,
         yearlySalesBaseline: {
             year1: 1000000,
@@ -62,27 +69,51 @@ export function StrategyClient() {
     }>>([])
     const [selectedVersionId, setSelectedVersionId] = useState<string>('')
 
-    // 送信済み案件を取得
-    useEffect(() => {
-        const fetchSubmitted = async () => {
-            const res = await getSubmittedCollection()
-            if (res.success && res.data) {
-                setSubmittedLink({ id: res.data.link.id, name: res.data.link.name })
-                // 版一覧を取得
-                const versionsRes = await getSimulationsByLink(res.data.link.id)
-                if (versionsRes.success && versionsRes.data.length > 0) {
-                    setSimulationVersions(versionsRes.data)
-                    // オリジナル版があればデフォルト選択
-                    const original = versionsRes.data.find((v: { version_type: string }) => v.version_type === 'original')
-                    if (original) {
-                        setSelectedVersionId(original.id)
-                        setData(original.simulation_data)
-                    }
-                }
-            }
+    // リンク一覧を取得
+    const fetchLinks = async () => {
+        setIsLoadingLinks(true)
+        const res = await getCollectionLinks()
+        if (res.success && res.data) {
+            setCollectionLinks(res.data as CollectionLink[])
         }
-        fetchSubmitted()
+        setIsLoadingLinks(false)
+    }
+
+    useEffect(() => {
+        fetchLinks()
     }, [])
+
+    // 案件選択時の処理
+    const handleSelectCase = async (linkId: string, responseId: string) => {
+        setIsLoadingLinks(true)
+        
+        // シミュレーション版の取得
+        const versionsRes = await getSimulationsByLink(linkId)
+        
+        if (versionsRes.success && versionsRes.data.length > 0) {
+            setSimulationVersions(versionsRes.data)
+            
+            // オリジナル版をデフォルト選択
+            const original = versionsRes.data.find((v: any) => v.version_type === 'original')
+            if (original) {
+                setSelectedVersionId(original.id)
+                setData(original.simulation_data)
+            } else {
+                setSelectedVersionId(versionsRes.data[0].id)
+                setData(versionsRes.data[0].simulation_data)
+            }
+            
+            // 選択中の案件情報を設定
+            const link = collectionLinks.find(l => l.id === linkId)
+            if (link) {
+                setSubmittedLink({ id: link.id, name: link.name })
+            }
+            
+            setViewMode('simulation')
+        }
+        
+        setIsLoadingLinks(false)
+    }
 
     // 版切替時にデータを更新
     const handleVersionChange = (versionId: string) => {
@@ -140,43 +171,75 @@ export function StrategyClient() {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [chatMessages])
 
-    // 金額フォーマット
-    const formatCurrency = (value: number) => {
-        if (!isFinite(value)) return '---'
-        return `¥${value.toLocaleString()}`
+    const handleBackToList = () => {
+        setViewMode('list')
+        setSubmittedLink(null)
+        fetchLinks() // 最新の状態を取得
     }
 
+    // --- RENDER ---
+
+    // リストビュー
+    if (viewMode === 'list') {
+        return (
+            <CaseList 
+                links={collectionLinks} 
+                isLoading={isLoadingLinks} 
+                onSelectCase={handleSelectCase}
+                onRefresh={fetchLinks}
+            />
+        )
+    }
+
+    // シミュレーションビュー
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-right-4 duration-300">
             {/* ヘッダー */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">M&A 投資回収シミュレーション</h1>
-                    <p className="text-slate-600 mt-1">譲渡後3年以内に初期投資＋スケルトン費用が回収可能かを詳細にシミュレーション</p>
-                </div>
-                <div className="flex gap-2">
-                    <CollectionLinkDialog />
-                    <SimulationHistory data={data} onLoad={handleHistoryLoad} />
+            <div className="flex flex-col gap-4">
+                <Button 
+                    variant="ghost" 
+                    className="self-start gap-2 pl-0 text-slate-500 hover:text-slate-900"
+                    onClick={handleBackToList}
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    案件一覧に戻る
+                </Button>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">
+                             {submittedLink?.name || '案件シミュレーション'}
+                        </h1>
+                        <p className="text-slate-600 mt-1">
+                            収集データを元に投資回収シミュレーションを実行中
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        {/* 這裡需要注意CollectionLinkDialog可能需要在List View顯示，Simulation View也可以有 */}
+                        <SimulationHistory data={data} onLoad={handleHistoryLoad} />
+                    </div>
                 </div>
             </div>
 
             {/* 案件ステータス＆版切替 */}
             {submittedLink && (
-                <Card className="border-green-200 bg-green-50">
+                <Card className="border-blue-200 bg-blue-50/50">
                     <CardContent className="py-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <span className="text-2xl">✅</span>
+                                <span className="text-2xl">📊</span>
                                 <div>
-                                    <p className="font-semibold text-green-800">申請受領済み</p>
-                                    <p className="text-sm text-green-700">{submittedLink.name || '案件データ'}</p>
+                                    <p className="font-semibold text-blue-900">シミュレーション実行中</p>
+                                    <p className="text-sm text-blue-700">選択中のバージョン: {
+                                        simulationVersions.find(v => v.id === selectedVersionId)?.title || 'オリジナル'
+                                    }</p>
                                 </div>
                             </div>
                             {simulationVersions.length > 0 && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-slate-600">シミュレーション版:</span>
+                                    <span className="text-sm text-slate-600">比較対象:</span>
                                     <Select value={selectedVersionId} onValueChange={handleVersionChange}>
-                                        <SelectTrigger className="w-[240px] bg-white">
+                                        <SelectTrigger className="w-[280px] bg-white">
                                             <SelectValue placeholder="版を選択" />
                                         </SelectTrigger>
                                         <SelectContent>
