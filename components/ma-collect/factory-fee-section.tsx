@@ -47,7 +47,7 @@ export function FactoryFeeSection({ data, averageMonthlyFeeRevenue, onChange }: 
                             <Input
                                 type="number"
                                 value={data.factoryFeePercentage}
-                                onChange={(e) => onChange(prev => ({ ...prev, factoryFeePercentage: parseFloat(e.target.value) || 0 }))}
+                                onChange={(e) => onChange(prev => ({ ...prev, factoryFeePercentage: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) }))}
                                 className="text-right pr-9 h-11 text-lg font-semibold"
                                 min={0}
                                 max={100}
