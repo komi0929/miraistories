@@ -76,20 +76,13 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                 <HelpCircle className="w-4 h-4 text-slate-400" />
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
-                                <p>現在の月間売上見込みをご入力ください。案件ごとの詳細を入力する場合は「高度な設定」をオンにしてください。</p>
+                                <p>案件を積み上げて売上予測を作成してください。</p>
                             </TooltipContent>
                         </Tooltip>
                     </div>
-                    <div className="flex items-center space-x-2">
-                        <Label htmlFor="sales-detailed-mode-collect" className="text-xs font-normal text-slate-500">高度な設定</Label>
-                        <Switch
-                            id="sales-detailed-mode-collect"
-                            checked={data.salesStrategyMode === 'detailed'}
-                            onCheckedChange={(checked) => onChange(prev => ({ ...prev, salesStrategyMode: checked ? 'detailed' : 'simple' }))}
-                        />
-                    </div>
+                    {/* 高度な設定（デフォルト有効・非表示） */}
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                     {/* 原価率 */}
                     <div>
                         <Label className="text-sm">平均原価率（%）</Label>
@@ -230,16 +223,16 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                         />
                                                     </div>
                                                     <div>
-                                                        <Label className="text-[10px] text-slate-500">開始月</Label>
+                                                        <Label className="text-xs text-slate-500">開始月（後）</Label>
                                                         <div className="relative">
                                                             <Input
                                                                 type="number"
+                                                                min={1}
                                                                 value={deal.startMonth}
-                                                                onChange={(e) => handleDealChange(deal.id, 'startMonth', parseInt(e.target.value))}
-                                                                className="h-7 text-xs pr-8"
-                                                                min={1} max={36}
+                                                                onChange={(e) => handleDealChange(deal.id, 'startMonth', parseInt(e.target.value) || 1)}
+                                                                className="h-9 pr-8"
                                                             />
-                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">ヶ月目〜</span>
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">ヶ月後</span>
                                                         </div>
                                                     </div>
                                                 </div>

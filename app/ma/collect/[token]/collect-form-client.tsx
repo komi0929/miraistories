@@ -112,8 +112,9 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 useDetailedExpenses: true, // 常に詳細モードON
                 maxCapacitySales: d.max_capacity_sales || 0,
                 costRatio: d.cost_ratio || 35,
-                salesStrategyMode: d.sales_strategy_mode || 'simple',
-                monthlySalesSimple: d.monthly_sales_simple || 0,
+                // デフォルト値
+                salesStrategyMode: 'detailed',
+                monthlySalesSimple: d.monthly_sales_simple || 1200000,
                 yearlySalesBaseline: d.yearly_sales_baseline || { year1: 0, year2: 0, year3: 0 },
                 deals: d.deals || [],
                 factoryFeePercentage: d.factory_fee_percentage || 0
@@ -468,9 +469,13 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                         <div className="mb-4 p-3 bg-white/60 rounded border border-blue-100 text-xs text-slate-500">
                             <strong>※シミュレーションに関するご注意</strong><br />
                             表示される回収期間や利益額は、税引前・償却前・仲介手数料抜きの概算値です。
-                            実際の投資判断においては、税理士等の専門家にご相談の上、詳細な収支計画を作成することをお勧めします。
                         </div>
                         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                            {error && (
+                                <div className="w-full mb-2 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
+                                    {error}
+                                </div>
+                            )}
                             <div className="text-sm text-blue-700">
                                 入力が完了しましたら、送信ボタンを押してください。<br />
                                 <span className="text-blue-600">※ 送信後は編集できなくなります</span>

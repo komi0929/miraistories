@@ -221,7 +221,7 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                             </div>
 
                             <div className="space-y-2 bg-slate-50 p-3 rounded-md border">
-                                <div className="grid grid-cols-[1fr_120px_100px_32px] gap-2 mb-1 px-1 text-xs text-slate-500 font-medium">
+                                <div className="grid grid-cols-[1fr_150px_100px_32px] gap-2 mb-1 px-1 text-xs text-slate-500 font-medium">
                                     <div>項目名</div>
                                     <div>月額</div>
                                     <div>残支払(回)</div>
@@ -229,7 +229,7 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                 </div>
                                 
                                 {data.leaseDetails.map((item) => (
-                                    <div key={item.id} className="grid grid-cols-[1fr_120px_100px_32px] gap-2 items-center">
+                                    <div key={item.id} className="grid grid-cols-[1fr_150px_100px_32px] gap-2 items-center">
                                         <Input
                                             value={item.name}
                                             onChange={(e) => handleDetailChange('lease', item.id, 'name', e.target.value)}

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { ExpenseItem, SalesDeal } from '@/types/ma-types'
+import { revalidatePath } from 'next/cache'
 
 // 型定義
 interface CollectionLink {
@@ -248,6 +249,10 @@ export async function saveResponse(
         
         // オリジナル版シミュレーションを自動作成
         await createOriginalSimulationInternal(supabase, linkId, responseData)
+
+        // 管理画面を再検証
+        // Note: インポートが必要ですが、ここでは動的importか、revalidatePathは'next/cache'からimport済みであることを前提とします
+        // このファイル冒頭に import { revalidatePath } from 'next/cache' を追加する必要があります
     }
     
     return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }

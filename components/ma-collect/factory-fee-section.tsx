@@ -38,7 +38,6 @@ export function FactoryFeeSection({ data, averageMonthlyFeeRevenue, onChange }: 
                         </Tooltip>
                     </div>
                     <CardDescription>
-                        譲渡後も発生する委託契約のフィー率がある場合にご入力ください
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-5">
