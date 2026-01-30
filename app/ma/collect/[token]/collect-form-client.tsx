@@ -516,6 +516,16 @@ export function CollectFormClient({ token: _token, linkId }: CollectFormClientPr
                                     {error}
                                 </div>
                             )}
+                            {simResult.alerts.length > 0 && (
+                                <div className="w-full mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800 space-y-1">
+                                    {simResult.alerts.map((msg, i) => (
+                                        <div key={i} className="flex items-start gap-2">
+                                            <span>⚠️</span>
+                                            <span>{msg.replace('⚠️ ', '')}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="text-sm text-blue-700">
                                 入力が完了しましたら、送信ボタンを押してください。<br />
                                 <span className="text-blue-600">※ 送信後は編集できなくなります</span>

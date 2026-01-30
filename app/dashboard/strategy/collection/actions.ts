@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { randomBytes } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
@@ -68,6 +69,7 @@ export async function createCollectionLink(scenarioId?: string, name?: string) {
  */
 export async function getCollectionLinks() {
     const supabase = await createClient()
+    const adminClient = createAdminClient()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -75,7 +77,7 @@ export async function getCollectionLinks() {
     }
     
     // 1. リンクとレスポンスを取得
-    const { data: linksData, error: linksError } = await (supabase as any)
+    const { data: linksData, error: linksError } = await adminClient
         .from('ma_collection_links')
         .select(`
             *,
@@ -99,7 +101,7 @@ export async function getCollectionLinks() {
 
     // 2. 関連するシミュレーションを取得
     const linkIds = linksData.map((l: any) => l.id)
-    const { data: simulationsData, error: simsError } = await (supabase as any)
+    const { data: simulationsData, error: simsError } = await adminClient
         .from('ma_simulations')
         .select('id, title, version_type, version_number, check_result, created_at, source_link_id')
         .in('source_link_id', linkIds)
