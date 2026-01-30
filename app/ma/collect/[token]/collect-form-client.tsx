@@ -539,6 +539,7 @@ export function CollectFormClient({ token: _token, linkId }: CollectFormClientPr
                 isPaybackOk={simResult.isPaybackOk}
                 cumulativeOperatingProfit={simResult.cumulativeOperatingProfit}
                 requiredImprovementPerMonth={simResult.requiredImprovementPerMonth}
+                finalCash={simResult.summary.finalCash}
             />
 
             <ConfirmDialog 

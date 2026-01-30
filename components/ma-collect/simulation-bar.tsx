@@ -9,13 +9,15 @@ interface SimulationBarProps {
     monthlyOperatingProfit?: number // Legacy support (optional)
     cumulativeOperatingProfit: number // New 3-year cumulative
     requiredImprovementPerMonth: number
+    finalCash?: number // New: 投資回収後の手残り額
 }
 
 export function SimulationBar({ 
     paybackYears, 
     isPaybackOk,
     cumulativeOperatingProfit,
-    requiredImprovementPerMonth
+    requiredImprovementPerMonth,
+    finalCash
 }: SimulationBarProps) {
     const isProfitable = cumulativeOperatingProfit > 0
     const yearsDisplay = paybackYears === Infinity ? '---' : paybackYears.toFixed(1)
@@ -90,14 +92,14 @@ export function SimulationBar({
                 <div className="w-full sm:w-auto text-center sm:text-right bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
                     {isPaybackOk ? (
                         <div>
-                            <p className="text-xs text-slate-500 font-medium">3年間の償却前利益(EBITDA)</p>
+                            <p className="text-xs text-slate-500 font-medium">3年間の最終収支（投資回収後）</p>
                             <p className={cn(
                                 "text-lg font-bold font-mono tracking-tight",
-                                cumulativeOperatingProfit >= 0 ? "text-slate-900" : "text-red-600"
+                                (finalCash ?? 0) >= 0 ? "text-slate-900" : "text-red-600"
                             )}>
-                                +¥{Math.floor(cumulativeOperatingProfit).toLocaleString()}
+                                {(finalCash ?? 0) >= 0 ? '+' : ''}¥{Math.floor(finalCash ?? 0).toLocaleString()}
                             </p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">※税引前・手数料目安</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">※EBITDAから初期投資・スケルトン費用を控除</p>
                         </div>
                     ) : !isProfitable ? (
                         <div className="space-y-1">
