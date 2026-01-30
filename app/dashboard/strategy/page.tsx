@@ -11,7 +11,7 @@ export default function StrategyPage() {
     return (
         <div className="relative">
              <StrategyClient />
-             <StrategyClient />
+
              <ResetButton />
         </div>
     )
