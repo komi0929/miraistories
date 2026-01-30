@@ -225,5 +225,22 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
             averageMonthlyOperatingProfit,
             averageMonthlyFeeRevenue
         }
-    }, [data])
+    }, [
+        data.desiredTransferPrice,
+        data.skeletonCost,
+        data.rent,
+        data.utilities,
+        data.laborCostTotal,
+        data.laborDetails,
+        data.otherExpensesTotal,
+        data.leaseDetails,
+        data.useDetailedExpenses,
+        data.maxCapacitySales,
+        data.costRatio,
+        data.salesStrategyMode,
+        data.monthlySalesSimple,
+        data.yearlySalesBaseline,
+        data.deals,
+        data.factoryFeePercentage
+    ])
 }

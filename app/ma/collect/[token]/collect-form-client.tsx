@@ -15,7 +15,7 @@ import { ExpenseSectionCollect } from '@/components/ma-collect/expense-section-c
 import { SalesSectionCollect } from '@/components/ma-collect/sales-section-collect'
 import { FactoryFeeSection } from '@/components/ma-collect/factory-fee-section'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
-import { KeyRound, Save, Send, CheckCircle, Loader2, Eye, Copy, Check } from 'lucide-react'
+import { KeyRound, Save, Send, CheckCircle, Loader2, Eye, Copy, Check, HelpCircle } from 'lucide-react'
 import { useMaSimulation } from '@/hooks/use-ma-simulation'
 import { SimulationBar } from '@/components/ma-collect/simulation-bar'
 import { ConfirmDialog } from '@/components/ma-collect/confirm-dialog'
@@ -371,6 +371,23 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                         </CardContent>
                     </Card>
                     
+                    <Card className="border-amber-300 bg-amber-50/50">
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <span className="text-amber-600">譲渡希望価格（税込）</span>
+                                <HelpCircle className="w-4 h-4 text-amber-400" />
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                <CurrencyInput
+                                    value={formData.desiredTransferPrice}
+                                    onChange={() => {}}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                    
                     <ExpenseSectionCollect 
                         data={formData}
                         onChange={() => {}}
@@ -442,6 +459,26 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                             />
                             <p className="text-xs text-slate-500">
                                 ※ デフォルトで300万円が設定されています
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+                
+                <Card className="border-amber-300 bg-amber-50/50">
+                    <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <span className="text-amber-600">譲渡希望価格（税込）</span>
+                            <HelpCircle className="w-4 h-4 text-amber-400" />
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2">
+                            <CurrencyInput
+                                value={formData.desiredTransferPrice}
+                                onChange={(val) => setFormData(prev => ({ ...prev, desiredTransferPrice: val }))}
+                            />
+                            <p className="text-xs text-amber-700">
+                                ※在庫資産や営業権（のれん）を含めた総額イメージをご入力ください
                             </p>
                         </div>
                     </CardContent>
