@@ -177,7 +177,7 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                                                                 type="number"
                                                                 min={1}
                                                                 value={deal.startMonth}
-                                                                onChange={(e) => handleDealChange(deal.id, 'startMonth', parseInt(e.target.value) || 1)}
+                                                                onChange={(e) => handleDealChange(deal.id, 'startMonth', Math.max(1, parseInt(e.target.value) || 1))}
                                                                 className="h-9 pr-8"
                                                             />
                                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">ヶ月後</span>

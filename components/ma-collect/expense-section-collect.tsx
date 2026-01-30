@@ -219,7 +219,7 @@ export function ExpenseSectionCollect({ data, onChange }: ExpenseSectionCollectP
                                             type="number"
                                             value={item.paymentRemainingMonths || ''}
                                             onChange={(e) => {
-                                                const val = e.target.value ? parseInt(e.target.value) : undefined
+                                                const val = e.target.value ? Math.max(1, parseInt(e.target.value)) : undefined
                                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                 handleDetailChange('lease', item.id, 'paymentRemainingMonths', val as any)
                                             }}
