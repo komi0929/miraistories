@@ -199,8 +199,22 @@ export async function saveResponse(
     responseData: Partial<CollectionResponse>,
     isDraft: boolean = true
 ) {
-    const supabase = await createClient()
+    // Adminクライアントを使用して権限を回避（リンクステータス更新や別ユーザーへの紐付けのため）
+    const supabase = await import('@/lib/supabase/admin').then(m => m.createAdminClient())
     
+    // セキュリティチェック: 回答者が存在し、認証済みであることを確認
+    const { data: respondent } = await (supabase as any)
+        .from('ma_collection_respondents')
+        .select('*')
+        .eq('id', respondentId)
+        .eq('link_id', linkId)
+        .eq('verified', true)
+        .single()
+    
+    if (!respondent) {
+        return { success: false, error: '認証情報が無効です' }
+    }
+
     // 既存の回答をチェック
     const { data: existing } = await (supabase as any)
         .from('ma_collection_responses')
@@ -242,17 +256,21 @@ export async function saveResponse(
     
     // 送信完了の場合はリンクステータスを更新＆オリジナル版を自動作成
     if (!isDraft) {
-        await (supabase as any)
+        const { error: linkError } = await (supabase as any)
             .from('ma_collection_links')
             .update({ status: 'submitted' })
             .eq('id', linkId)
+
+        if (linkError) {
+             console.error('Failed to update link status:', linkError)
+             // 致命的ではないが進言
+        }
         
         // オリジナル版シミュレーションを自動作成
         await createOriginalSimulationInternal(supabase, linkId, responseData)
 
         // 管理画面を再検証
-        // Note: インポートが必要ですが、ここでは動的importか、revalidatePathは'next/cache'からimport済みであることを前提とします
-        // このファイル冒頭に import { revalidatePath } from 'next/cache' を追加する必要があります
+        revalidatePath('/dashboard/strategy')
     }
     
     return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }

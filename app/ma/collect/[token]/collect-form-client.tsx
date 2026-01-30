@@ -41,7 +41,7 @@ const initialFormData = {
     useDetailedExpenses: true,
     maxCapacitySales: 0, // 人員キャパシティ
     costRatio: 35,
-    salesStrategyMode: 'simple' as 'simple' | 'detailed',
+    salesStrategyMode: 'detailed' as 'simple' | 'detailed',
     monthlySalesSimple: 0,
     yearlySalesBaseline: { year1: 0, year2: 0, year3: 0 },
     deals: [] as SalesDeal[],
