@@ -343,12 +343,11 @@ export async function resetAllCollectionData() {
     const linkIds = links.map((l: any) => l.id)
 
     // 2. 関連データの削除
-    // Simulation (original)
+    // Simulation (All versions associated with these links)
     await (supabase as any)
         .from('ma_simulations')
         .delete()
         .in('source_link_id', linkIds)
-        .eq('version_type', 'original')
 
     // Responses
     await (supabase as any)
@@ -356,18 +355,23 @@ export async function resetAllCollectionData() {
         .delete()
         .in('link_id', linkIds)
 
-    // Respondents (認証もリセットする場合)
+    // Respondents
     await (supabase as any)
         .from('ma_collection_respondents')
         .delete()
         .in('link_id', linkIds)
 
-    // 3. リンクステータスをpendingに戻す
-    await (supabase as any)
+    // 3. リンク自体の削除
+    const { error: deleteError } = await (supabase as any)
         .from('ma_collection_links')
-        .update({ status: 'pending' })
+        .delete()
         .in('id', linkIds)
 
+    if (deleteError) {
+        console.error('Failed to delete links:', deleteError)
+        return { success: false, error: 'リンクの削除に失敗しました' }
+    }
+
     revalidatePath('/dashboard/strategy')
-    return { success: true, message: '全ての収集データをリセットしました' }
+    return { success: true, message: '全ての収集データとリンクを完全に削除しました' }
 }
