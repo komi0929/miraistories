@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ExpenseItem, SalesDeal } from '@/types/ma-types'
 import { revalidatePath } from 'next/cache'
 
@@ -40,70 +41,84 @@ interface CollectionResponse {
  * トークンからリンク情報を取得
  */
 export async function getLinkByToken(token: string) {
-    const supabase = await createClient()
-    
-    const { data, error } = await (supabase as any)
-        .from('ma_collection_links')
-        .select('*')
-        .eq('token', token)
-        .single()
-    
-    if (error || !data) {
-        return { success: false, error: 'リンクが見つかりません' }
+    try {
+        const supabase = await createClient()
+        
+        const { data, error } = await supabase
+            .from('ma_collection_links')
+            .select('*')
+            .eq('token', token)
+            .single()
+        
+        if (error || !data) {
+            return { success: false, error: 'リンクが見つかりません' }
+        }
+        
+        const link = data as unknown as CollectionLink
+        
+        // 有効期限チェック
+        if (link.expires_at && new Date(link.expires_at) < new Date()) {
+            return { success: false, error: 'このリンクは有効期限が切れています' }
+        }
+        
+        // ステータスチェック
+        if (link.status === 'expired') {
+            return { success: false, error: 'このリンクは無効です' }
+        }
+        
+        return { success: true, data: link }
+    } catch (e) {
+        console.error('getLinkByToken error:', e)
+        return { success: false, error: 'サーバーエラー' }
     }
-    
-    const link = data as CollectionLink
-    
-    // 有効期限チェック
-    if (link.expires_at && new Date(link.expires_at) < new Date()) {
-        return { success: false, error: 'このリンクは有効期限が切れています' }
-    }
-    
-    // ステータスチェック
-    if (link.status === 'expired') {
-        return { success: false, error: 'このリンクは無効です' }
-    }
-    
-    return { success: true, data: link }
 }
 
 /**
  * リンクステータスを確認
  */
 export async function checkLinkStatus(linkId: string) {
-    const supabase = await createClient()
-    
-    const { data, error } = await (supabase as any)
-        .from('ma_collection_links')
-        .select('status')
-        .eq('id', linkId)
-        .single()
-    
-    if (error || !data) {
+    try {
+        const supabase = await createClient()
+        
+        const { data, error } = await supabase
+            .from('ma_collection_links')
+            .select('status')
+            .eq('id', linkId)
+            .single()
+        
+        if (error || !data) {
+            return { success: false, status: null }
+        }
+        
+        return { success: true, status: (data as { status: string }).status }
+    } catch (e) {
+        console.error('checkLinkStatus error:', e)
         return { success: false, status: null }
     }
-    
-    return { success: true, status: data.status }
 }
 
 /**
  * 既存の回答データを取得（linkIdのみで取得）
  */
 export async function getExistingResponse(linkId: string) {
-    // Adminクライアントを使用
-    const supabase = await import('@/lib/supabase/admin').then(m => m.createAdminClient())
-    
-    const { data, error } = await (supabase as any)
-        .from('ma_collection_responses')
-        .select('*')
-        .eq('link_id', linkId)
-        .single()
-    
-    if (error || !data) {
+    try {
+        const supabase = createAdminClient()
+        
+        const { data, error } = await supabase
+            .from('ma_collection_responses')
+            .select('*')
+            .eq('link_id', linkId)
+            .single()
+        
+        if (error || !data) {
+            return { success: false, data: null }
+        }
+        
+        return { success: true, data: data as unknown as CollectionResponse }
+    } catch (e) {
+        console.error('getExistingResponse error:', e)
         return { success: false, data: null }
     }
-    
-    return { success: true, data: data as CollectionResponse }
 }
 
 /**
@@ -114,75 +129,92 @@ export async function saveResponse(
     responseData: Partial<CollectionResponse>,
     isDraft: boolean = true
 ) {
-    // Adminクライアントを使用して権限を回避
-    const supabase = await import('@/lib/supabase/admin').then(m => m.createAdminClient())
+    try {
+        console.log('[saveResponse] Start - linkId:', linkId, 'isDraft:', isDraft)
+        
+        const supabase = createAdminClient()
 
-    // 既存の回答をチェック
-    const { data: existing } = await (supabase as any)
-        .from('ma_collection_responses')
-        .select('id')
-        .eq('link_id', linkId)
-        .single()
-    
-    const payload = {
-        ...responseData,
-        link_id: linkId,
-        is_draft: isDraft,
-        updated_at: new Date().toISOString()
-    }
-    
-    if (existing) {
-        // 更新
-        const { error } = await (supabase as any)
+        // 既存の回答をチェック
+        const { data: existingData, error: fetchError } = await supabase
             .from('ma_collection_responses')
-            .update(payload)
-            .eq('id', existing.id)
+            .select('id')
+            .eq('link_id', linkId)
+            .maybeSingle()
         
-        if (error) {
-            console.error('Failed to update response:', error)
-            return { success: false, error: '保存に失敗しました' }
+        if (fetchError) {
+            console.error('[saveResponse] Fetch error:', fetchError)
         }
-    } else {
-        // 新規作成
-        const { error } = await (supabase as any)
-            .from('ma_collection_responses')
-            .insert(payload)
         
-        if (error) {
-            console.error('Failed to create response:', error)
-            return { success: false, error: '保存に失敗しました' }
+        const existing = existingData as { id: string } | null
+        console.log('[saveResponse] Existing:', existing)
+        
+        const payload = {
+            ...responseData,
+            link_id: linkId,
+            is_draft: isDraft,
+            updated_at: new Date().toISOString()
         }
-    }
-    
-    // 送信完了の場合はリンクステータスを更新＆オリジナル版を自動作成
-    if (!isDraft) {
-        const { error: linkError } = await (supabase as any)
-            .from('ma_collection_links')
-            .update({ status: 'submitted' })
-            .eq('id', linkId)
+        
+        if (existing) {
+            // 更新
+            console.log('[saveResponse] Updating existing record:', existing.id)
+            const { error } = await (supabase as any)
+                .from('ma_collection_responses')
+                .update(payload)
+                .eq('id', existing.id)
+            
+            if (error) {
+                console.error('[saveResponse] Update failed:', error)
+                return { success: false, message: '保存に失敗しました: ' + error.message }
+            }
+        } else {
+            // 新規作成
+            console.log('[saveResponse] Creating new record')
+            const { error } = await (supabase as any)
+                .from('ma_collection_responses')
+                .insert(payload)
+            
+            if (error) {
+                console.error('[saveResponse] Insert failed:', error)
+                return { success: false, message: '保存に失敗しました: ' + error.message }
+            }
+        }
+        
+        // 送信完了の場合はリンクステータスを更新＆オリジナル版を自動作成
+        if (!isDraft) {
+            console.log('[saveResponse] Updating link status to submitted')
+            const { error: linkError } = await (supabase as any)
+                .from('ma_collection_links')
+                .update({ status: 'submitted' })
+                .eq('id', linkId)
 
-        if (linkError) {
-             console.error('Failed to update link status:', linkError)
+            if (linkError) {
+                console.error('[saveResponse] Link status update failed:', linkError)
+            }
+            
+            // オリジナル版シミュレーションを自動作成
+            await createOriginalSimulationInternal(supabase, linkId, responseData)
+
+            // 管理画面を再検証
+            revalidatePath('/dashboard/strategy')
         }
         
-        // オリジナル版シミュレーションを自動作成
-        await createOriginalSimulationInternal(supabase, linkId, responseData)
-
-        // 管理画面を再検証
-        revalidatePath('/dashboard/strategy')
+        console.log('[saveResponse] Success')
+        return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }
+    } catch (e) {
+        console.error('[saveResponse] Unexpected error:', e)
+        return { success: false, message: 'サーバーエラーが発生しました' }
     }
-    
-    return { success: true, message: isDraft ? '下書きを保存しました' : '送信が完了しました' }
 }
 
 /**
  * 収集データをSimulationData形式に変換（内部用）
  */
 function convertResponseToSimulationData(response: Partial<CollectionResponse>) {
-    const anyResponse = response as any
+    const anyResponse = response as Record<string, unknown>
     return {
         // 初期投資
-        acquisitionCost: anyResponse.desired_transfer_price || 0,
+        acquisitionCost: (anyResponse.desired_transfer_price as number) || 0,
         renovationCost: 0,
         skeletonCost: response.skeleton_cost || 3000000,
         
@@ -196,7 +228,7 @@ function convertResponseToSimulationData(response: Partial<CollectionResponse>) 
         leaseDetails: response.lease_details || [],
         
         // キャパシティ
-        maxCapacitySales: anyResponse.max_capacity_sales || 0,
+        maxCapacitySales: (anyResponse.max_capacity_sales as number) || 0,
         
         // 売上
         costRatio: response.cost_ratio || 35,
@@ -215,41 +247,46 @@ function convertResponseToSimulationData(response: Partial<CollectionResponse>) 
  * オリジナル版シミュレーションを作成（内部用）
  */
 async function createOriginalSimulationInternal(
-    supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+    supabase: ReturnType<typeof createAdminClient>,
     linkId: string, 
     responseData: Partial<CollectionResponse>
 ) {
-    // リンク情報取得
-    const { data: link } = await (supabase as any)
-        .from('ma_collection_links')
-        .select('owner_id, name')
-        .eq('id', linkId)
-        .single()
-    
-    if (!link) {
-        console.error('Link not found for original simulation')
+    try {
+        // リンク情報取得
+        const { data: link, error: linkError } = await supabase
+            .from('ma_collection_links')
+            .select('owner_id, name')
+            .eq('id', linkId)
+            .single()
+        
+        if (linkError || !link) {
+            console.error('Link not found for original simulation:', linkError)
+            return { success: false }
+        }
+        
+        // SimulationData形式に変換
+        const simulationData = convertResponseToSimulationData(responseData)
+        
+        // オリジナル版として保存
+        const { error } = await (supabase as any)
+            .from('ma_simulations')
+            .insert({
+                user_id: (link as { owner_id: string }).owner_id,
+                title: `📥 オリジナル: ${(link as { name: string | null }).name || '申請データ'}`,
+                simulation_data: simulationData,
+                source_link_id: linkId,
+                version_type: 'original',
+                version_number: 1
+            })
+        
+        if (error) {
+            console.error('Failed to create original simulation:', error)
+            return { success: false }
+        }
+        
+        return { success: true }
+    } catch (e) {
+        console.error('createOriginalSimulationInternal error:', e)
         return { success: false }
     }
-    
-    // SimulationData形式に変換
-    const simulationData = convertResponseToSimulationData(responseData)
-    
-    // オリジナル版として保存
-    const { error } = await (supabase as any)
-        .from('ma_simulations')
-        .insert({
-            user_id: link.owner_id,
-            title: `📥 オリジナル: ${link.name || '申請データ'}`,
-            simulation_data: simulationData,
-            source_link_id: linkId,
-            version_type: 'original',
-            version_number: 1
-        })
-    
-    if (error) {
-        console.error('Failed to create original simulation:', error)
-        return { success: false }
-    }
-    
-    return { success: true }
 }
