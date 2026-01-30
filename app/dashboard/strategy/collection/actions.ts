@@ -81,7 +81,7 @@ export async function getCollectionLinks() {
         .from('ma_collection_links')
         .select(`
             *,
-            ma_collection_responses!fk_ma_collection_responses_link_id (
+            ma_collection_responses (
                 id,
                 is_draft,
                 updated_at
