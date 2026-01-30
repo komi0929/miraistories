@@ -114,52 +114,6 @@ export function SalesSectionCollect({ data, onChange }: SalesSectionCollectProps
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {/* 期ごとのベースライン */}
-                            <div className="p-3 bg-slate-50 rounded-lg border">
-                                <h3 className="text-sm font-semibold mb-3 flex items-center">
-                                    <TrendingUp className="w-4 h-4 mr-1 text-slate-500" />
-                                    期別ベースライン売上（月商）
-                                </h3>
-                                <p className="text-xs text-slate-500 mb-3">
-                                    各期間の平均的な月間売上をご入力ください
-                                </p>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <Label className="text-xs text-slate-500">1期目 (1-12ヶ月)</Label>
-                                        <CurrencyInput
-                                            value={data.yearlySalesBaseline.year1}
-                                            onChange={(val) => onChange(prev => ({
-                                                ...prev,
-                                                yearlySalesBaseline: { ...prev.yearlySalesBaseline, year1: val }
-                                            }))}
-                                            className="mt-1 h-8 text-sm"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-slate-500">2期目 (13-24ヶ月)</Label>
-                                        <CurrencyInput
-                                            value={data.yearlySalesBaseline.year2}
-                                            onChange={(val) => onChange(prev => ({
-                                                ...prev,
-                                                yearlySalesBaseline: { ...prev.yearlySalesBaseline, year2: val }
-                                            }))}
-                                            className="mt-1 h-8 text-sm"
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-slate-500">3期目 (25ヶ月~)</Label>
-                                        <CurrencyInput
-                                            value={data.yearlySalesBaseline.year3}
-                                            onChange={(val) => onChange(prev => ({
-                                                ...prev,
-                                                yearlySalesBaseline: { ...prev.yearlySalesBaseline, year3: val }
-                                            }))}
-                                            className="mt-1 h-8 text-sm"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
                             {/* 案件積み上げ */}
                             <div className="space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">

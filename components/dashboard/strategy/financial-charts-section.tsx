@@ -35,7 +35,8 @@ export function FinancialChartsSection({ data, result }: FinancialChartsSectionP
     const totalFixedCosts = data.rent + data.laborCostTotal + (data.useDetailedExpenses ? data.laborDetails.reduce((s, i) => s + i.amount, 0) - data.laborCostTotal : 0) +
         data.utilities + data.otherExpensesTotal + (data.useDetailedExpenses ? data.leaseDetails.reduce((s, i) => s + i.amount, 0) - data.otherExpensesTotal : 0)
 
-    const currentSales = data.salesStrategyMode === 'simple' ? data.monthlySalesSimple : data.yearlySalesBaseline.year1
+    // 現在の月商（シミュレーション結果の1ヶ月目を利用）
+    const currentSales = result.monthlyData.length > 0 ? result.monthlyData[0].sales : 0
 
     const bepData = []
     const maxSales = Math.max(currentSales * 1.5, totalFixedCosts * 2)

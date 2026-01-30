@@ -121,10 +121,8 @@ export function calculatePayback(data: SimulationData): SimulationResult {
         if (data.salesStrategyMode === 'simple') {
             monthlySales = data.monthlySalesSimple
         } else {
-            // ベースライン売上
-            if (month <= 12) monthlySales = data.yearlySalesBaseline.year1
-            else if (month <= 24) monthlySales = data.yearlySalesBaseline.year2
-            else monthlySales = data.yearlySalesBaseline.year3
+            // ベースライン売上は廃止（0からスタートし、案件積み上げのみで計算）
+            monthlySales = 0
 
             // 案件積み上げ
             for (const deal of data.deals) {

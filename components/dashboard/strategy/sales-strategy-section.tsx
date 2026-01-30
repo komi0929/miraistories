@@ -6,8 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Trash2, TrendingUp } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { SalesDeal, SimulationData } from '@/lib/ma-simulation'
 import { CurrencyInput } from './currency-input'
 
@@ -85,49 +84,6 @@ export function SalesStrategySection({ data, onChange }: SalesStrategySectionPro
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {/* 期ごとのベースライン */}
-                        <div className="p-3 bg-slate-50 rounded-lg border">
-                            <h3 className="text-sm font-semibold mb-3 flex items-center">
-                                <TrendingUp className="w-4 h-4 mr-1 text-slate-500" />
-                                期別ベースライン（月商）
-                            </h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                    <Label className="text-xs text-slate-500">1期目 (1-12ヶ月)</Label>
-                                    <CurrencyInput
-                                        value={data.yearlySalesBaseline.year1}
-                                        onChange={(val) => onChange({
-                                            ...data,
-                                            yearlySalesBaseline: { ...data.yearlySalesBaseline, year1: val }
-                                        })}
-                                        className="mt-1 h-8 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-xs text-slate-500">2期目 (13-24ヶ月)</Label>
-                                    <CurrencyInput
-                                        value={data.yearlySalesBaseline.year2}
-                                        onChange={(val) => onChange({
-                                            ...data,
-                                            yearlySalesBaseline: { ...data.yearlySalesBaseline, year2: val }
-                                        })}
-                                        className="mt-1 h-8 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-xs text-slate-500">3期目 (25ヶ月~)</Label>
-                                    <CurrencyInput
-                                        value={data.yearlySalesBaseline.year3}
-                                        onChange={(val) => onChange({
-                                            ...data,
-                                            yearlySalesBaseline: { ...data.yearlySalesBaseline, year3: val }
-                                        })}
-                                        className="mt-1 h-8 text-sm"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
                         {/* 案件積み上げ */}
                         <div className="space-y-4">
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
