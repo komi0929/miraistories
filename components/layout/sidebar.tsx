@@ -76,9 +76,10 @@ export function Sidebar() {
             {/* Logo / Brand */}
             <div className="flex items-center justify-between h-14 px-4 border-b border-slate-700">
                 {!isCollapsed && (
-                    <span className="font-bold text-lg tracking-tight">
-                        Sweets Core
-                    </span>
+                    <div className="flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/logo.png" alt="miraistories" className="h-8 w-auto" />
+                    </div>
                 )}
                 <Button
                     variant="ghost"
@@ -131,7 +132,7 @@ export function Sidebar() {
             {!isCollapsed && (
                 <div className="p-4 border-t border-slate-700">
                     <p className="text-xs text-slate-500">
-                        Phase 2 ERP • v2.0
+                        miraistories • v1.0
                     </p>
                 </div>
             )}
