@@ -6,18 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { 
-    requestVerification, 
-    verifyCode, 
-    checkRespondentAuth,
     saveResponse,
-    getExistingResponse 
+    getExistingResponse,
+    checkLinkStatus
 } from '../actions'
 import { PreambleSection } from '@/components/ma-collect/preamble-section'
 import { ExpenseSectionCollect } from '@/components/ma-collect/expense-section-collect'
 import { SalesSectionCollect } from '@/components/ma-collect/sales-section-collect'
 import { FactoryFeeSection } from '@/components/ma-collect/factory-fee-section'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
-import { Mail, KeyRound, Save, Send, CheckCircle, Loader2 } from 'lucide-react'
+import { KeyRound, Save, Send, CheckCircle, Loader2, Eye, Copy, Check } from 'lucide-react'
 import { useMaSimulation } from '@/hooks/use-ma-simulation'
 import { SimulationBar } from '@/components/ma-collect/simulation-bar'
 import { ConfirmDialog } from '@/components/ma-collect/confirm-dialog'
@@ -28,9 +26,12 @@ interface CollectFormClientProps {
     linkId: string
 }
 
+// 固定認証コード
+const FIXED_AUTH_CODE = '8888'
+
 // 初期データ
 const initialFormData = {
-    desiredTransferPrice: 0, // 譲渡希望価格（税込）
+    desiredTransferPrice: 0,
     skeletonCost: 3000000, 
     rent: 0,
     utilities: 0,
@@ -39,7 +40,7 @@ const initialFormData = {
     otherExpensesTotal: 0,
     leaseDetails: [] as ExpenseItem[],
     useDetailedExpenses: true,
-    maxCapacitySales: 0, // 人員キャパシティ
+    maxCapacitySales: 0,
     costRatio: 35,
     salesStrategyMode: 'detailed' as 'simple' | 'detailed',
     monthlySalesSimple: 0,
@@ -51,20 +52,24 @@ const initialFormData = {
 type FormData = typeof initialFormData
 
 export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
-    // 認証ステート
-    const [authStep, setAuthStep] = useState<'email' | 'code' | 'authenticated'>('email')
-    const [email, setEmail] = useState('')
-    const [verificationCode, setVerificationCode] = useState('')
-    const [respondentId, setRespondentId] = useState<string | null>(null)
+    // 認証ステート（シンプル化: コード入力のみ）
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
+    const [authCode, setAuthCode] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [devCode, setDevCode] = useState<string | null>(null)
     
     // フォームデータ
     const [formData, setFormData] = useState<FormData>(initialFormData)
     const [isSaving, setIsSaving] = useState(false)
     const [lastSaved, setLastSaved] = useState<Date | null>(null)
+    
+    // 送信済み状態 & 読み取り専用モード
     const [isSubmitted, setIsSubmitted] = useState(false)
+    const [isReadOnly, setIsReadOnly] = useState(false)
+    
+    // 下書き保存成功モーダル
+    const [showDraftModal, setShowDraftModal] = useState(false)
+    const [urlCopied, setUrlCopied] = useState(false)
 
     // 確認ダイアログの状態
     const [confirmOpen, setConfirmOpen] = useState(false)
@@ -72,17 +77,24 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
     // リアルタイムシミュレーション
     const simResult = useMaSimulation(formData)
     
+    // 現在のURL
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : ''
+    
     // 既存データを取得
-    const loadExistingData = async (resId: string) => {
-        const result = await getExistingResponse(linkId, resId)
+    const loadExistingData = async () => {
+        const result = await getExistingResponse(linkId)
         if (result.success && result.data) {
             const d = result.data
             
-            // 旧データ（簡易入力）からの移行ロジック
+            // 送信済みの場合は読み取り専用モードに
+            if (!d.is_draft) {
+                setIsReadOnly(true)
+            }
+            
+            // 旧データからの移行ロジック
             let loadedLaborDetails = d.labor_details || []
             let loadedLeaseDetails = d.lease_details || []
             
-            // 詳細モードがOFF、かつ合計のみ入力されていた場合、それを詳細項目の1つとして復元する
             if (!d.use_detailed_expenses) {
                 if (d.labor_cost_total && d.labor_cost_total > 0 && loadedLaborDetails.length === 0) {
                     loadedLaborDetails = [{
@@ -109,10 +121,9 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 laborDetails: loadedLaborDetails,
                 otherExpensesTotal: d.other_expenses_total || 0,
                 leaseDetails: loadedLeaseDetails,
-                useDetailedExpenses: true, // 常に詳細モードON
+                useDetailedExpenses: true,
                 maxCapacitySales: d.max_capacity_sales || 0,
                 costRatio: d.cost_ratio || 35,
-                // デフォルト値
                 salesStrategyMode: 'detailed',
                 monthlySalesSimple: d.monthly_sales_simple || 1200000,
                 yearlySalesBaseline: d.yearly_sales_baseline || { year1: 0, year2: 0, year3: 0 },
@@ -122,86 +133,46 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         }
     }
     
-    // セッション復元（localStorage）
+    // リンクステータス確認（送信済みチェック）
     useEffect(() => {
-        const restoreSession = async () => {
-            const savedEmail = localStorage.getItem(`ma_collect_${token}_email`)
-            if (savedEmail) {
-                const result = await checkRespondentAuth(linkId, savedEmail)
-                if (result.authenticated && result.respondentId) {
-                    setEmail(savedEmail)
-                    setRespondentId(result.respondentId)
-                    setAuthStep('authenticated')
-                    loadExistingData(result.respondentId)
-                }
+        const checkStatus = async () => {
+            const result = await checkLinkStatus(linkId)
+            if (result.success && result.status === 'submitted') {
+                // 送信済みリンクの場合、認証後に読み取り専用で表示
+                setIsReadOnly(true)
             }
         }
-        restoreSession()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token, linkId])
+        checkStatus()
+    }, [linkId])
     
-    // メール送信
-    const handleSendCode = async () => {
-        if (!email.trim() || !email.includes('@')) {
-            setError('有効なメールアドレスを入力してください')
-            return
-        }
-        
-        setIsLoading(true)
-        setError(null)
-        
-        const result = await requestVerification(linkId, email)
-        
-        if (result.success) {
-            setAuthStep('code')
-            localStorage.setItem(`ma_collect_${token}_email`, email)
-            if (result.devCode) {
-                setDevCode(result.devCode)
-            }
-        } else {
-            setError(result.message || '送信に失敗しました')
-        }
-        
-        setIsLoading(false)
-    }
-    
-    // コード検証
+    // コード認証
     const handleVerifyCode = async () => {
-        if (verificationCode.length !== 6) {
-            setError('6桁のコードを入力してください')
+        if (authCode !== FIXED_AUTH_CODE) {
+            setError('認証コードが正しくありません')
             return
         }
         
         setIsLoading(true)
         setError(null)
         
-        const result = await verifyCode(linkId, email, verificationCode)
+        // 認証成功
+        setIsAuthenticated(true)
         
-        if (result.success && result.respondentId) {
-            setRespondentId(result.respondentId)
-            setAuthStep('authenticated')
-            setDevCode(null)
-            // 既存データを取得
-            loadExistingData(result.respondentId)
-        } else {
-            setError(result.error || '認証に失敗しました')
-        }
+        // 既存データを取得
+        await loadExistingData()
         
         setIsLoading(false)
     }
     
     // 下書き保存
     const handleSaveDraft = async () => {
-        if (!respondentId) return
-        
         setIsSaving(true)
         
-        const result = await saveResponse(linkId, respondentId, {
+        const result = await saveResponse(linkId, {
             desired_transfer_price: formData.desiredTransferPrice,
             skeleton_cost: formData.skeletonCost,
             rent: formData.rent,
             utilities: formData.utilities,
-            // 詳細配列から合計を計算して保存
             labor_cost_total: formData.laborDetails.reduce((sum, item) => sum + (item.amount || 0), 0),
             labor_details: formData.laborDetails,
             other_expenses_total: formData.leaseDetails.reduce((sum, item) => sum + (item.amount || 0), 0),
@@ -218,31 +189,30 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         
         if (result.success) {
             setLastSaved(new Date())
+            setShowDraftModal(true) // モーダル表示
         }
         
         setIsSaving(false)
     }
     
-    // 送信ボタンハンドラ（確認フロー追加）
+    // URLコピー
+    const handleCopyUrl = async () => {
+        await navigator.clipboard.writeText(currentUrl)
+        setUrlCopied(true)
+        setTimeout(() => setUrlCopied(false), 2000)
+    }
+    
+    // 送信ボタンハンドラ
     const handleSubmit = async () => {
-        if (!respondentId) return
-
-        // シミュレーション結果が36ヶ月（3年）を超える場合は確認ダイアログを表示
-        // isPaybackOkがfalseの場合
         if (!simResult.isPaybackOk) {
             setConfirmOpen(true)
             return
         }
-        
-        // 問題なければ即時送信
         await executeSubmit()
     }
     
     // 実際の送信処理
     const executeSubmit = async (supplementalInfo?: string) => {
-        if (!respondentId) return
-
-        // ダイアログが開いていない（条件クリア）場合のみ標準confirmを出す
         if (!confirmOpen) {
             if (!confirm('入力内容を送信します。送信後は編集できなくなります。よろしいですか？')) {
                 return
@@ -252,12 +222,11 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         setIsSaving(true)
         setConfirmOpen(false)
         
-        const result = await saveResponse(linkId, respondentId, {
+        const result = await saveResponse(linkId, {
             desired_transfer_price: formData.desiredTransferPrice,
             skeleton_cost: formData.skeletonCost,
             rent: formData.rent,
             utilities: formData.utilities,
-            // 詳細配列から合計を計算して保存
             labor_cost_total: formData.laborDetails.reduce((sum, item) => sum + (item.amount || 0), 0),
             labor_details: formData.laborDetails,
             other_expenses_total: formData.leaseDetails.reduce((sum, item) => sum + (item.amount || 0), 0),
@@ -282,12 +251,12 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
         setIsSaving(false)
     }
     
-    // 送信完了画面
+    // 送信完了画面（URL付き）
     if (isSubmitted) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
                 <Card className="max-w-md w-full text-center">
-                    <CardContent className="pt-8 pb-8">
+                    <CardContent className="pt-8 pb-8 space-y-4">
                         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
                         <h1 className="text-xl font-bold text-slate-900 mb-2">
                             ご入力ありがとうございました
@@ -296,111 +265,144 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                             条件のご入力が完了しました。<br />
                             担当者より追ってご連絡いたします。
                         </p>
+                        <div className="bg-slate-100 p-4 rounded-lg text-left mt-4">
+                            <p className="text-sm text-slate-600 mb-2">
+                                入力いただいた内容はこちらから確認できます：
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Input 
+                                    value={currentUrl} 
+                                    readOnly 
+                                    className="text-xs bg-white"
+                                />
+                                <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    onClick={handleCopyUrl}
+                                >
+                                    {urlCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">
+                                ※ 確認には認証コードが必要です
+                            </p>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
         )
     }
     
-    // 認証画面
-    if (authStep !== 'authenticated') {
+    // 認証画面（コード入力のみ）
+    if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
                 <Card className="max-w-md w-full">
                     <CardHeader className="text-center">
                         <CardTitle className="flex items-center justify-center gap-2">
-                            {authStep === 'email' ? (
-                                <><Mail className="w-5 h-5" /> メールアドレスの確認</>
-                            ) : (
-                                <><KeyRound className="w-5 h-5" /> 認証コードの入力</>
-                            )}
+                            <KeyRound className="w-5 h-5" /> 認証コードの入力
                         </CardTitle>
                         <CardDescription>
-                            {authStep === 'email' 
-                                ? '入力を開始するため、メールアドレスをご登録ください。'
-                                : `${email} に送信された6桁のコードを入力してください。`
-                            }
+                            担当者からお伝えした4桁のコードを入力してください。
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {authStep === 'email' ? (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="email">メールアドレス</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="your@email.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSendCode()}
-                                    />
-                                </div>
-                                {error && (
-                                    <p className="text-sm text-red-600">{error}</p>
-                                )}
-                                <Button 
-                                    className="w-full" 
-                                    onClick={handleSendCode}
-                                    disabled={isLoading}
-                                >
-                                    {isLoading ? '送信中...' : '認証コードを送信'}
-                                </Button>
-                            </>
-                        ) : (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="code">認証コード（6桁）</Label>
-                                    <Input
-                                        id="code"
-                                        type="text"
-                                        placeholder="000000"
-                                        maxLength={6}
-                                        value={verificationCode}
-                                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-                                        className="text-center text-2xl tracking-widest"
-                                    />
-                                </div>
-                                {devCode && (
-                                    <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
-                                        <p className="font-medium text-yellow-800">開発モード</p>
-                                        <p className="text-yellow-700">認証コード: <span className="font-mono font-bold">{devCode}</span></p>
-                                    </div>
-                                )}
-                                {error && (
-                                    <p className="text-sm text-red-600">{error}</p>
-                                )}
-                                <Button 
-                                    className="w-full" 
-                                    onClick={handleVerifyCode}
-                                    disabled={isLoading}
-                                >
-                                    {isLoading ? '確認中...' : '認証する'}
-                                </Button>
-                                <Button 
-                                    variant="ghost" 
-                                    className="w-full text-sm"
-                                    onClick={() => setAuthStep('email')}
-                                >
-                                    別のメールアドレスを使用
-                                </Button>
-                            </>
+                        <div className="space-y-2">
+                            <Label htmlFor="code">認証コード</Label>
+                            <Input
+                                id="code"
+                                type="text"
+                                placeholder="0000"
+                                maxLength={4}
+                                value={authCode}
+                                onChange={(e) => setAuthCode(e.target.value.replace(/\D/g, ''))}
+                                onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
+                                className="text-center text-2xl tracking-widest"
+                            />
+                        </div>
+                        {error && (
+                            <p className="text-sm text-red-600">{error}</p>
                         )}
+                        <Button 
+                            className="w-full" 
+                            onClick={handleVerifyCode}
+                            disabled={isLoading || authCode.length !== 4}
+                        >
+                            {isLoading ? '確認中...' : '認証する'}
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
         )
     }
     
-    // メインフォーム
+    // 読み取り専用モード（送信済みデータの確認）
+    if (isReadOnly) {
+        return (
+            <div className="min-h-screen bg-slate-50 pb-8">
+                {/* 読み取り専用ヘッダー */}
+                <div className="sticky top-0 z-10 bg-amber-50 border-b border-amber-200">
+                    <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-center gap-2">
+                        <Eye className="w-5 h-5 text-amber-600" />
+                        <span className="font-medium text-amber-800">
+                            確認モード（編集できません）
+                        </span>
+                    </div>
+                </div>
+                
+                <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 opacity-80 pointer-events-none">
+                    <PreambleSection />
+                    
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">退去時費用</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                <Label>スケルトン工事費用（税込）</Label>
+                                <CurrencyInput
+                                    value={formData.skeletonCost}
+                                    onChange={() => {}}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                    
+                    <ExpenseSectionCollect 
+                        data={formData}
+                        onChange={() => {}}
+                    />
+                    
+                    <SalesSectionCollect
+                        data={formData}
+                        onChange={() => {}}
+                    />
+                    
+                    <FactoryFeeSection
+                        data={formData}
+                        averageMonthlyFeeRevenue={simResult.averageMonthlyFeeRevenue}
+                        onChange={() => {}}
+                    />
+                </div>
+
+                <SimulationBar 
+                    paybackYears={simResult.paybackYears}
+                    isPaybackOk={simResult.isPaybackOk}
+                    cumulativeOperatingProfit={simResult.cumulativeOperatingProfit}
+                    requiredImprovementPerMonth={simResult.requiredImprovementPerMonth}
+                />
+            </div>
+        )
+    }
+    
+    // メインフォーム（編集可能）
     return (
-        <div className="min-h-screen bg-slate-50 pb-32 transition-all"> {/* pb-32で固定バー分のスペース確保 */}
+        <div className="min-h-screen bg-slate-50 pb-32 transition-all">
             {/* 固定ヘッダー */}
             <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
                 <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
                     <div className="text-sm text-slate-600">
-                        <span className="font-medium">{email}</span> でログイン中
+                        情報入力フォーム
                     </div>
                     <div className="flex items-center gap-2">
                         {lastSaved && (
@@ -422,10 +424,8 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
             </div>
             
             <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-                {/* 前提条件 */}
                 <PreambleSection />
                 
-                {/* スケルトン費用 */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-base">退去時費用</CardTitle>
@@ -444,19 +444,16 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                     </CardContent>
                 </Card>
                 
-                {/* 販管費 */}
                 <ExpenseSectionCollect 
                     data={formData}
                     onChange={setFormData}
                 />
                 
-                {/* 売上見込み */}
                 <SalesSectionCollect
                     data={formData}
                     onChange={setFormData}
                 />
                 
-                {/* 委託工場フィー */}
                 <FactoryFeeSection
                     data={formData}
                     averageMonthlyFeeRevenue={simResult.averageMonthlyFeeRevenue}
@@ -494,7 +491,6 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 </Card>
             </div>
 
-            {/* シミュレーション結果バー */}
             <SimulationBar 
                 paybackYears={simResult.paybackYears}
                 isPaybackOk={simResult.isPaybackOk}
@@ -502,7 +498,6 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 requiredImprovementPerMonth={simResult.requiredImprovementPerMonth}
             />
 
-            {/* 送信確認ダイアログ */}
             <ConfirmDialog 
                 open={confirmOpen}
                 onClose={() => setConfirmOpen(false)}
@@ -511,6 +506,46 @@ export function CollectFormClient({ token, linkId }: CollectFormClientProps) {
                 cumulativeOperatingProfit={simResult.cumulativeOperatingProfit}
                 isPaybackOk={simResult.isPaybackOk}
             />
+            
+            {/* 下書き保存成功モーダル */}
+            {showDraftModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <Card className="max-w-md w-full">
+                        <CardContent className="pt-6 space-y-4">
+                            <div className="flex items-center gap-2 text-green-600">
+                                <CheckCircle className="w-6 h-6" />
+                                <h2 className="font-bold text-lg">下書きを保存しました</h2>
+                            </div>
+                            <p className="text-sm text-slate-600">
+                                続きは以下のURLより編集できますので、保管をお願いします。
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Input 
+                                    value={currentUrl} 
+                                    readOnly 
+                                    className="text-xs bg-slate-50"
+                                />
+                                <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    onClick={handleCopyUrl}
+                                >
+                                    {urlCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                ※ 次回アクセス時も認証コードが必要です
+                            </p>
+                            <Button 
+                                className="w-full"
+                                onClick={() => setShowDraftModal(false)}
+                            >
+                                閉じる
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     )
 }

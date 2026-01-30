@@ -16,7 +16,6 @@ interface CollectionLink {
 interface CollectionResponse {
     id: string
     link_id: string
-    respondent_id: string
     is_draft: boolean
     desired_transfer_price: number
     max_capacity_sales: number
@@ -69,164 +68,65 @@ export async function getLinkByToken(token: string) {
 }
 
 /**
- * メールアドレスで認証コードを送信（簡易版: コードを返す）
+ * リンクステータスを確認
  */
-export async function requestVerification(linkId: string, email: string) {
-    try {
-        const supabase = await createClient()
-        
-        // 6桁の認証コードを生成
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString()
-        
-        // 既存の回答者をチェック
-        const { data: existing, error: fetchError } = await (supabase as any)
-            .from('ma_collection_respondents')
-            .select('*')
-            .eq('link_id', linkId)
-            .eq('email', email)
-            .single()
-        
-        if (fetchError && fetchError.code !== 'PGRST116') {
-            console.error('Database fetch error:', fetchError)
-            return { success: false, error: 'データベースエラーが発生しました（テーブル未作成の可能性があります）' }
-        }
-
-        if (existing) {
-            // 既存のレコードを更新
-            const { error: updateError } = await (supabase as any)
-                .from('ma_collection_respondents')
-                .update({ verification_code: verificationCode })
-                .eq('id', existing.id)
-            
-            if (updateError) throw updateError
-        } else {
-            // 新規レコードを作成
-            const { error: insertError } = await (supabase as any)
-                .from('ma_collection_respondents')
-                .insert({
-                    link_id: linkId,
-                    email,
-                    verification_code: verificationCode,
-                    verified: false
-                })
-                
-            if (insertError) {
-                console.error('Database insert error:', insertError)
-                return { success: false, error: 'データの保存に失敗しました' }
-            }
-        }
-        
-        // TODO: 実際のメール送信（現在はコンソールに出力）
-        console.log(`[MA Collection] Verification code for ${email}: ${verificationCode}`)
-        
-        return { 
-            success: true, 
-            message: '認証コードを送信しました。メールをご確認ください。',
-            // DEMO用: 本番環境でも認証コードを表示（本来は猶予期間後に削除すべき）
-            devCode: verificationCode 
-        }
-    } catch (error) {
-        console.error('Request Verification Error:', error)
-        return { success: false, error: 'サーバー接続エラーが発生しました' }
-    }
-}
-
-/**
- * 認証コードを検証
- */
-export async function verifyCode(linkId: string, email: string, code: string) {
+export async function checkLinkStatus(linkId: string) {
     const supabase = await createClient()
     
-    const { data: respondent, error } = await (supabase as any)
-        .from('ma_collection_respondents')
-        .select('*')
-        .eq('link_id', linkId)
-        .eq('email', email)
-        .eq('verification_code', code)
+    const { data, error } = await (supabase as any)
+        .from('ma_collection_links')
+        .select('status')
+        .eq('id', linkId)
         .single()
     
-    if (error || !respondent) {
-        return { success: false, error: '認証コードが正しくありません' }
+    if (error || !data) {
+        return { success: false, status: null }
     }
     
-    // 認証済みに更新
-    await (supabase as any)
-        .from('ma_collection_respondents')
-        .update({ 
-            verified: true, 
-            verified_at: new Date().toISOString(),
-            verification_code: null 
-        })
-        .eq('id', respondent.id)
-    
-    return { 
-        success: true, 
-        respondentId: respondent.id 
-    }
+    return { success: true, status: data.status }
 }
 
 /**
- * 回答者の認証状態を確認
+ * 既存の回答データを取得（linkIdのみで取得）
  */
-export async function checkRespondentAuth(linkId: string, email: string) {
-    const supabase = await createClient()
+export async function getExistingResponse(linkId: string) {
+    // Adminクライアントを使用
+    const supabase = await import('@/lib/supabase/admin').then(m => m.createAdminClient())
     
-    const { data: respondent } = await (supabase as any)
-        .from('ma_collection_respondents')
+    const { data, error } = await (supabase as any)
+        .from('ma_collection_responses')
         .select('*')
         .eq('link_id', linkId)
-        .eq('email', email)
-        .eq('verified', true)
         .single()
     
-    if (!respondent) {
-        return { success: false, authenticated: false }
+    if (error || !data) {
+        return { success: false, data: null }
     }
     
-    return { 
-        success: true, 
-        authenticated: true,
-        respondentId: respondent.id 
-    }
+    return { success: true, data: data as CollectionResponse }
 }
 
 /**
- * 回答データを保存（下書き保存対応）
+ * 回答データを保存（シンプル版 - respondentId不要）
  */
 export async function saveResponse(
     linkId: string, 
-    respondentId: string, 
     responseData: Partial<CollectionResponse>,
     isDraft: boolean = true
 ) {
-    // Adminクライアントを使用して権限を回避（リンクステータス更新や別ユーザーへの紐付けのため）
+    // Adminクライアントを使用して権限を回避
     const supabase = await import('@/lib/supabase/admin').then(m => m.createAdminClient())
-    
-    // セキュリティチェック: 回答者が存在し、認証済みであることを確認
-    const { data: respondent } = await (supabase as any)
-        .from('ma_collection_respondents')
-        .select('*')
-        .eq('id', respondentId)
-        .eq('link_id', linkId)
-        .eq('verified', true)
-        .single()
-    
-    if (!respondent) {
-        return { success: false, error: '認証情報が無効です' }
-    }
 
     // 既存の回答をチェック
     const { data: existing } = await (supabase as any)
         .from('ma_collection_responses')
         .select('id')
         .eq('link_id', linkId)
-        .eq('respondent_id', respondentId)
         .single()
     
     const payload = {
         ...responseData,
         link_id: linkId,
-        respondent_id: respondentId,
         is_draft: isDraft,
         updated_at: new Date().toISOString()
     }
@@ -263,7 +163,6 @@ export async function saveResponse(
 
         if (linkError) {
              console.error('Failed to update link status:', linkError)
-             // 致命的ではないが進言
         }
         
         // オリジナル版シミュレーションを自動作成
@@ -277,34 +176,13 @@ export async function saveResponse(
 }
 
 /**
- * 既存の回答データを取得
- */
-export async function getExistingResponse(linkId: string, respondentId: string) {
-    const supabase = await createClient()
-    
-    const { data, error } = await (supabase as any)
-        .from('ma_collection_responses')
-        .select('*')
-        .eq('link_id', linkId)
-        .eq('respondent_id', respondentId)
-        .single()
-    
-    if (error || !data) {
-        return { success: false, data: null }
-    }
-    
-    return { success: true, data: data as CollectionResponse }
-}
-
-/**
  * 収集データをSimulationData形式に変換（内部用）
  */
 function convertResponseToSimulationData(response: Partial<CollectionResponse>) {
-    // Note: desired_transfer_price は response オブジェクトに含まれる可能性がある
     const anyResponse = response as any
     return {
         // 初期投資
-        acquisitionCost: anyResponse.desired_transfer_price || 0, // 譲渡希望価格
+        acquisitionCost: anyResponse.desired_transfer_price || 0,
         renovationCost: 0,
         skeletonCost: response.skeleton_cost || 3000000,
         
@@ -334,7 +212,7 @@ function convertResponseToSimulationData(response: Partial<CollectionResponse>) 
 }
 
 /**
- * オリジナル版シミュレーションを作成（内部用 - supabaseクライアントを引数で受け取る）
+ * オリジナル版シミュレーションを作成（内部用）
  */
 async function createOriginalSimulationInternal(
     supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
@@ -375,4 +253,3 @@ async function createOriginalSimulationInternal(
     
     return { success: true }
 }
-
