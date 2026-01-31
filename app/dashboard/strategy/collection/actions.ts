@@ -288,8 +288,8 @@ export async function createOriginalSimulation(linkId: string, responseData: any
             simulation_data: simulationData,
             source_link_id: linkId,
             version_type: 'original',
-            version_number: 1,
-            is_locked: true // オリジナル版は読み取り専用
+            version_number: 1
+            // is_locked: true // Migration 008 unapplied compatibility
         })
     
     if (error) {
@@ -364,10 +364,10 @@ export async function saveSimulationVersion(
             title: title || `📝 編集版 Ver.${nextVersionNumber}`,
             simulation_data: simulationData,
             source_link_id: linkId,
-            parent_simulation_id: parentSimulationId,
             version_type: 'custom',
-            version_number: nextVersionNumber,
-            is_locked: false
+            version_number: nextVersionNumber
+            // is_locked: false,
+            // parent_simulation_id: parentSimulationId
         })
         .select()
         .single()
