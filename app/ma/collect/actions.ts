@@ -277,7 +277,8 @@ async function createOriginalSimulationInternal(
                 simulation_data: simulationData,
                 source_link_id: linkId,
                 version_type: 'original',
-                version_number: 1
+                version_number: 1,
+                is_locked: true // オリジナル版は読み取り専用
             })
         
         if (error) {

@@ -22,28 +22,61 @@ const ADVISOR_PERSONA = `
  * 財務指標の計算・分析ヘルパー
  */
 function analyzeFinancials(data: SimulationData, result: SimulationResult) {
-    const totalExpenses = data.rent + data.laborCostTotal + data.utilities + data.otherExpensesTotal +
+    // 経費は再計算せず、シミュレーション結果（1ヶ月目）から取得して整合性を担保
+    // ※月次で変動しない前提の簡易シミュレーション
+    const totalExpenses = result.monthlyData[0]?.expenses || (
+        data.rent + data.laborCostTotal + data.utilities + data.otherExpensesTotal +
         (data.useDetailedExpenses ? data.laborDetails.reduce((s, i) => s + i.amount, 0) - data.laborCostTotal : 0) +
         (data.useDetailedExpenses ? data.leaseDetails.reduce((s, i) => s + i.amount, 0) - data.otherExpensesTotal : 0)
+    )
 
     const laborCost = data.useDetailedExpenses
         ? data.laborDetails.reduce((s, i) => s + i.amount, 0)
         : data.laborCostTotal
 
-    // 損益分岐点売上 = 固定費 / (1 - 原価率)
-    const breakEvenPoint = totalExpenses / (1 - (data.costRatio / 100))
+    // 損益分岐点売上 (BEP)
+    // 計算式: 固定費 / (1 - 変動費率)
+    // 変動費率 = 原価率 + (委託工場フィー / 売上)
+    
+    // 現在の売上（月商）
+    const currentSales = data.salesStrategyMode === 'simple' 
+        ? data.monthlySalesSimple 
+        : data.yearlySalesBaseline.year1 + data.deals.reduce((acc, deal) => {
+            // 簡易的に全案件が乗っていると仮定するか、シミュレーション結果から逆算するか
+            // ここではresult.monthlyData[0].salesを採用するのが最も正確
+            return 0
+        }, 0)
+    
+    // 正確な月商を取得
+    const monthlySales = result.monthlyData[0]?.sales || 1
 
-    // 労働分配率 = 人件費 / 粗利
-    const laborShare = laborCost / result.monthlyGrossProfit * 100
+    // 委託工場フィー率（対売上）
+    const factoryFee = result.monthlyData[0]?.factoryFee || 0
+    const factoryFeeRatio = monthlySales > 0 ? factoryFee / monthlySales : 0
+    
+    // 変動費率合計
+    const variableCostRatio = (data.costRatio / 100) + factoryFeeRatio
+
+    // BEP計算（分母が0にならないよう保護）
+    const breakEvenPoint = variableCostRatio < 1 
+        ? totalExpenses / (1 - variableCostRatio) 
+        : totalExpenses * 10 // 利益が出ない構造の場合は極端な値を防ぐ
+
+    // 労働分配率 = 人件費 / 実質粗利
+    // 実質粗利 = 売上 - 原価 - 委託工場フィー
+    const actualGrossProfit = result.monthlyGrossProfit
+    const laborShare = actualGrossProfit > 0 ? (laborCost / actualGrossProfit * 100) : 0
 
     // 家賃比率 = 家賃 / 売上
-    const rentRatio = data.rent / (data.salesStrategyMode === 'simple' ? data.monthlySalesSimple : data.yearlySalesBaseline.year1) * 100
+    const rentRatio = monthlySales > 0 ? (data.rent / monthlySales * 100) : 0
 
     return {
         breakEvenPoint,
         laborShare,
         rentRatio,
-        actualMonthlyProfit: result.monthlyOperatingProfit, // 実際の営業利益
+        actualMonthlyProfit: result.monthlyOperatingProfit,
+        monthlySales,
+        factoryFee
     }
 }
 
@@ -70,6 +103,7 @@ export async function chatWithAI(
 - 3期目ベース売上: ${data.yearlySalesBaseline.year3.toLocaleString()}円
 - 積み上げ案件数: ${data.deals.length}件
 - シミュレーション適用フィルタ: ${data.probabilityFilter}
+- 委託工場フィー設定: ${data.factoryFeePercentage ? `${data.factoryFeePercentage}%` : 'なし'}
 `
         }
 
@@ -84,6 +118,7 @@ ${ADVISOR_PERSONA}
   (現在の設定売上との差: ${(result.monthlyGrossProfit / (1 - data.costRatio / 100) - analysis.breakEvenPoint).toLocaleString()}円)
 - 労働分配率: ${analysis.laborShare.toFixed(1)}% (適正目安: 35-40%, 50%超は危険水域)
 - 家賃比率: ${analysis.rentRatio.toFixed(1)}% (適正目安: 10%以下)
+- 委託工場フィー負担: ${analysis.factoryFee.toLocaleString()}円/月
 
 ### 2. 回収シミュレーション
 - 回収期間: ${result.paybackMonths === Infinity ? '回収不能' : `${result.paybackMonths}ヶ月`}
@@ -137,6 +172,7 @@ ${ADVISOR_PERSONA}
 - 損益分岐点(BEP): 月商 ${Math.round(analysis.breakEvenPoint).toLocaleString()}円
 - 労働分配率: ${analysis.laborShare.toFixed(1)}%
 - 家賃比率: ${analysis.rentRatio.toFixed(1)}%
+- 委託工場フィー負担: ${analysis.factoryFee.toLocaleString()}円/月
 
 ## レビュー指示
 250文字以内で、以下の構成で出力してください。

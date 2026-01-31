@@ -11,10 +11,11 @@ import { chatWithAI, getAIReview } from './actions'
 import { CurrencyInput } from '@/components/dashboard/strategy/currency-input'
 import { ExpenseSection } from '@/components/dashboard/strategy/expense-section'
 import { SalesStrategySection } from '@/components/dashboard/strategy/sales-strategy-section'
-import { FinancialChartsSection } from '@/components/dashboard/strategy/financial-charts-section'
 import { SimulationHistory } from '@/components/dashboard/strategy/simulation-history'
+import { SimulationChart } from '@/components/dashboard/strategy/simulation-chart'
 import { CollectionLinkDialog } from '@/components/dashboard/strategy/collection-link-dialog'
-import { getCollectionLinks, getSimulationsByLink } from './collection/actions'
+import { getCollectionLinks, getSimulationsByLink, saveSimulationVersion } from './collection/actions'
+import { Save, Loader2 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CaseList, CollectionLink } from '@/components/dashboard/strategy/case-list'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
@@ -46,7 +47,7 @@ export function StrategyClient() {
         ],
 
         costRatio: 35,
-        salesStrategyMode: 'detailed', // Default to detailed based on previous requirements
+        salesStrategyMode: 'detailed',
         monthlySalesSimple: 1200000,
         yearlySalesBaseline: {
             year1: 1000000,
@@ -54,7 +55,8 @@ export function StrategyClient() {
             year3: 1500000,
         },
         deals: [],
-        probabilityFilter: 'all'
+        probabilityFilter: 'high_only', // デフォルトをhigh_onlyに（収集側と統一）
+        factoryFeePercentage: 0
     })
 
     // 計算結果
@@ -70,6 +72,11 @@ export function StrategyClient() {
         simulation_data: SimulationData
     }>>([])
     const [selectedVersionId, setSelectedVersionId] = useState<string>('')
+    const [isSavingVersion, setIsSavingVersion] = useState(false)
+    
+    // 現在選択中の版がオリジナルかどうか
+    const selectedVersion = simulationVersions.find(v => v.id === selectedVersionId)
+    const isOriginal = selectedVersion?.version_type === 'original'
 
     // リンク一覧を取得
     const fetchLinks = async () => {
@@ -137,6 +144,44 @@ export function StrategyClient() {
     // 履歴ロードハンドラ
     const handleHistoryLoad = (loadedData: SimulationData) => {
         setData(loadedData)
+    }
+
+    // 編集版として保存
+    const handleSaveAsVersion = async () => {
+        if (!submittedLink) return
+        
+        setIsSavingVersion(true)
+        
+        const result = await saveSimulationVersion(
+            submittedLink.id,
+            selectedVersionId, // 親版ID
+            data,
+            `📝 編集版`
+        )
+        
+        if (result.success) {
+            toast({
+                title: "保存完了",
+                description: "編集版として保存しました",
+            })
+            // 版一覧を再取得
+            const versionsRes = await getSimulationsByLink(submittedLink.id)
+            if (versionsRes.success) {
+                setSimulationVersions(versionsRes.data)
+                // 新しく作成した版を選択
+                if (result.data) {
+                    setSelectedVersionId(result.data.id)
+                }
+            }
+        } else {
+            toast({
+                title: "保存エラー",
+                description: result.error || "保存に失敗しました",
+                variant: "destructive"
+            })
+        }
+        
+        setIsSavingVersion(false)
     }
 
     // AIチャット
@@ -241,7 +286,8 @@ export function StrategyClient() {
                                 <div>
                                     <p className="font-semibold text-blue-900">シミュレーション実行中</p>
                                     <p className="text-sm text-blue-700">選択中のバージョン: {
-                                        simulationVersions.find(v => v.id === selectedVersionId)?.title || 'オリジナル'
+                                        selectedVersion?.version_type === 'original' ? '📥 オリジナル: ' : '📝 '}
+                                        {selectedVersion?.title.replace('📥 オリジナル: ', '').replace('📝 編集版', '編集版') || 'オリジナル'
                                     }</p>
                                 </div>
                             </div>
@@ -266,6 +312,41 @@ export function StrategyClient() {
                         </div>
                     </CardContent>
                 </Card>
+            )}
+
+            {/* オリジナル版の読み取り専用バナー */}
+            {isOriginal && (
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-amber-800">
+                        <span className="text-xl">📥</span>
+                        <div>
+                            <p className="font-semibold">オリジナルデータ（読み取り専用）</p>
+                            <p className="text-sm text-amber-600">相手方から提出されたデータです。編集するには「編集版として保存」してください。</p>
+                        </div>
+                    </div>
+                    <Button 
+                        onClick={handleSaveAsVersion}
+                        disabled={isSavingVersion}
+                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                        {isSavingVersion ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                        編集版として保存
+                    </Button>
+                </div>
+            )}
+
+            {/* 編集版の場合は保存ボタンを表示 */}
+            {!isOriginal && submittedLink && (
+                <div className="flex justify-end">
+                    <Button 
+                        onClick={handleSaveAsVersion}
+                        disabled={isSavingVersion}
+                        variant="outline"
+                    >
+                        {isSavingVersion ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                        変更を新版として保存
+                    </Button>
+                </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -314,6 +395,7 @@ export function StrategyClient() {
                     <SalesStrategySection
                         data={data}
                         onChange={setData}
+                        readOnly={isOriginal}
                     />
                 </div>
 
@@ -337,7 +419,10 @@ export function StrategyClient() {
                     </Card>
 
                     {/* 高度な財務チャート・分析セクション */}
-                    <FinancialChartsSection data={data} result={result} />
+                    {/* シミュレーション可視化チャート */}
+                    <div className="pt-2">
+                        <SimulationChart result={result} />
+                    </div>
                 </div>
 
                 {/* 右カラム：AIアドバイザー */}

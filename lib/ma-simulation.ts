@@ -70,6 +70,7 @@ export interface SimulationResult {
         expenses: number
         operatingProfit: number
         cashFlow: number // 累積CF
+        factoryFee: number // 委託工場フィー
     }[]
 
     // 累積CF（グラフ用配列）
@@ -162,9 +163,19 @@ export function calculatePayback(data: SimulationData): SimulationResult {
                 }
             }
         }
-        // 粗利・営業利益（委託工場フィーは売上から差し引く）
-        const effectiveSales = monthlySales - monthlyFactoryFee
-        const monthlyGrossProfit = effectiveSales * (1 - data.costRatio / 100)
+        // 粗利・営業利益
+        // 正しい会計ロジック:
+        // 1. 売上原価 = 月商 * 原価率
+        // 2. 売上総利益(GrossProfit) = 月商 - 売上原価
+        // 3. 委託工場フィー(FactoryFee) = 対象売上 * 料率
+        
+        const monthlyGrossProfitBeforeFee = monthlySales * (1 - data.costRatio / 100)
+        // 実質粗利
+        const monthlyGrossProfit = monthlyGrossProfitBeforeFee - monthlyFactoryFee
+        
+        // 営業利益 = 粗利 - 販管費
+        // ※減価償却費は考慮しない（ユーザー指示により、現金収支ベースまたはEBITDAベースでのシミュレーションとする）
+        // ※スケルトン費用などは初期投資として回収対象には含まれるが、月次のPL費用としては扱わない
         const monthlyOperatingProfit = monthlyGrossProfit - totalMonthlyExpenses
 
         if (month <= 12) {
@@ -172,6 +183,7 @@ export function calculatePayback(data: SimulationData): SimulationResult {
         }
 
         // 累積CF更新
+        // ここでは簡易的に 営業利益 ≒ キャッシュフロー とみなす（税金、運転資金増減等は考慮しない）
         cumulative += monthlyOperatingProfit
 
         monthlyData.push({
@@ -180,7 +192,8 @@ export function calculatePayback(data: SimulationData): SimulationResult {
             grossProfit: monthlyGrossProfit,
             expenses: totalMonthlyExpenses,
             operatingProfit: monthlyOperatingProfit,
-            cashFlow: cumulative
+            cashFlow: cumulative,
+            factoryFee: monthlyFactoryFee
         })
         cumulativeCashFlow.push(cumulative)
     }

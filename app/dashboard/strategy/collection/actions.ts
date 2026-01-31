@@ -288,7 +288,8 @@ export async function createOriginalSimulation(linkId: string, responseData: any
             simulation_data: simulationData,
             source_link_id: linkId,
             version_type: 'original',
-            version_number: 1
+            version_number: 1,
+            is_locked: true // オリジナル版は読み取り専用
         })
     
     if (error) {
@@ -324,6 +325,60 @@ export async function getSimulationsByLink(linkId: string) {
     }
     
     return { success: true, data: data || [] }
+}
+
+/**
+ * シミュレーション版を新規保存（編集版作成）
+ */
+export async function saveSimulationVersion(
+    linkId: string,
+    parentSimulationId: string | null,
+    simulationData: any,
+    title: string
+) {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+        return { success: false, error: '認証が必要です' }
+    }
+    
+    // 既存版の最大バージョン番号を取得
+    const { data: existingVersions } = await (supabase as any)
+        .from('ma_simulations')
+        .select('version_number')
+        .eq('source_link_id', linkId)
+        .eq('user_id', user.id)
+        .order('version_number', { ascending: false })
+        .limit(1)
+    
+    const nextVersionNumber = existingVersions && existingVersions.length > 0 
+        ? (existingVersions[0].version_number || 1) + 1 
+        : 2 // オリジナルが1なので編集版は2から
+    
+    // 新しいシミュレーション版を作成
+    const { data: newSim, error } = await (supabase as any)
+        .from('ma_simulations')
+        .insert({
+            user_id: user.id,
+            title: title || `📝 編集版 Ver.${nextVersionNumber}`,
+            simulation_data: simulationData,
+            source_link_id: linkId,
+            parent_simulation_id: parentSimulationId,
+            version_type: 'custom',
+            version_number: nextVersionNumber,
+            is_locked: false
+        })
+        .select()
+        .single()
+    
+    if (error) {
+        console.error('Failed to save simulation version:', error)
+        return { success: false, error: 'シミュレーションの保存に失敗しました' }
+    }
+    
+    revalidatePath('/dashboard/strategy')
+    return { success: true, data: newSim }
 }
 
 /**
