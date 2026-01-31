@@ -4,6 +4,7 @@ export interface ExpenseItem {
     id: string
     name: string
     amount: number
+    paymentRemainingMonths?: number // リース等の支払残期間（指定月数後に0円になる）
 }
 
 // 案件（積み上げ売上）
@@ -45,6 +46,9 @@ export interface SimulationData {
         year3: number
     }
     deals: SalesDeal[]
+    
+    // アラート用設定
+    maxCapacitySales?: number // 人員キャパシティ上限（0=無制限）
 
     // シミュレーション設定
     probabilityFilter: 'all' | 'high_only' | 'weighted'
@@ -75,6 +79,26 @@ export interface SimulationResult {
 
     // 累積CF（グラフ用配列）
     cumulativeCashFlow: number[]
+
+    // --- Extended Fields (For Client UI Compat) ---
+    summary?: {
+        totalSales: number
+        totalOperatingProfit: number
+        finalCash: number
+        paybackMonths: number | null
+        profitMargin: number
+        roi: number
+    }
+    isPaybackOk?: boolean
+    paybackYears?: number
+    alerts?: string[]
+    targetGap?: number | null
+    
+    // Legacy support
+    cumulativeOperatingProfit?: number
+    requiredImprovementPerMonth?: number
+    averageMonthlyOperatingProfit?: number
+    averageMonthlyFeeRevenue?: number
 }
 
 /**
@@ -84,35 +108,24 @@ export function calculatePayback(data: SimulationData): SimulationResult {
     // 1. 初期投資
     const totalInvestment = data.acquisitionCost + data.renovationCost + data.skeletonCost
 
-    // 2. 経費計算（月額固定と仮定）
-    let totalMonthlyExpenses = 0
 
-    // 家賃
-    totalMonthlyExpenses += data.rent
-    // 光熱費
-    totalMonthlyExpenses += data.utilities
-
-    // 人件費
-    if (data.useDetailedExpenses) {
-        const laborTotal = data.laborDetails.reduce((sum, item) => sum + item.amount, 0)
-        totalMonthlyExpenses += laborTotal
-    } else {
-        totalMonthlyExpenses += data.laborCostTotal
-    }
-
-    // その他経費・リース
-    if (data.useDetailedExpenses) {
-        const leaseTotal = data.leaseDetails.reduce((sum, item) => sum + item.amount, 0)
-        totalMonthlyExpenses += leaseTotal
-    } else {
-        totalMonthlyExpenses += data.otherExpensesTotal
-    }
 
     // 3. 36ヶ月シミュレーション
     const monthlyData: SimulationResult['monthlyData'] = []
     const cumulativeCashFlow: number[] = []
     let cumulative = -totalInvestment
     let firstYearOperatingProfit = 0
+    let cumulativeSales = 0
+    let cumulativeFactoryFee = 0
+
+    // アラート管理
+    let capacityAlertTriggered = false
+    let lowLaborCostAlertTriggered = false
+    
+    // 有効な案件（確度: Fixed or High）のみで計算
+    const validDeals = (data.deals || []).filter(d => d.probability === 'fixed' || d.probability === 'high')
+    // Target案件（ギャップ計算用）
+    const targetDeals = (data.deals || []).filter(d => d.probability === 'target')
 
     for (let month = 1; month <= 36; month++) {
         // 月間売上計算
@@ -132,37 +145,28 @@ export function calculatePayback(data: SimulationData): SimulationResult {
             monthlySales = currentBaseline
 
             // 案件積み上げ
-            for (const deal of data.deals) {
+            for (const deal of validDeals) { // validDealsを使用する
                 // 期間内かチェック（durationMonths未指定=永続）
                 const endMonth = deal.durationMonths ? deal.startMonth + deal.durationMonths : 999
                 if (month >= deal.startMonth && month < endMonth) {
-                    // 確度フィルタ/重み付け (新形式: fixed/high/target, 旧形式: high/medium/low)
-                    let dealAmount = 0
-                    if (data.probabilityFilter === 'all') {
-                        // target/low以外すべて
-                        if (deal.probability !== 'target' && deal.probability !== 'low') {
-                            dealAmount = deal.monthlyAmount
-                        }
-                    } else if (data.probabilityFilter === 'high_only') {
-                        // fixed, high のみ (新形式対応)
-                        if (deal.probability === 'fixed' || deal.probability === 'high') {
-                            dealAmount = deal.monthlyAmount
-                        }
-                    } else if (data.probabilityFilter === 'weighted') {
-                        // 重み付け計算 (旧形式との互換性維持)
-                        if (deal.probability === 'fixed' || deal.probability === 'high') dealAmount = deal.monthlyAmount * 1.0
-                        else if (deal.probability === 'medium') dealAmount = deal.monthlyAmount * 0.5
-                        else if (deal.probability === 'target' || deal.probability === 'low') dealAmount = deal.monthlyAmount * 0.2
-                    }
-                    monthlySales += dealAmount
+                    monthlySales += deal.monthlyAmount
                     
                     // 委託工場フィー計算（対象案件のみ）
                     if (deal.isFactoryFeeTarget && data.factoryFeePercentage) {
-                        monthlyFactoryFee += dealAmount * (data.factoryFeePercentage / 100)
+                        monthlyFactoryFee += deal.monthlyAmount * (data.factoryFeePercentage / 100)
                     }
                 }
             }
         }
+        
+        cumulativeSales += monthlySales
+        cumulativeFactoryFee += monthlyFactoryFee
+
+        // Capacity Check
+        if ((data.maxCapacitySales || 0) > 0 && monthlySales > (data.maxCapacitySales || 0)) {
+            capacityAlertTriggered = true
+        }
+
         // 粗利・営業利益
         // 正しい会計ロジック:
         // 1. 売上原価 = 月商 * 原価率
@@ -173,9 +177,44 @@ export function calculatePayback(data: SimulationData): SimulationResult {
         // 実質粗利
         const monthlyGrossProfit = monthlyGrossProfitBeforeFee - monthlyFactoryFee
         
-        // 営業利益 = 粗利 - 販管費
-        // ※減価償却費は考慮しない（ユーザー指示により、現金収支ベースまたはEBITDAベースでのシミュレーションとする）
-        // ※スケルトン費用などは初期投資として回収対象には含まれるが、月次のPL費用としては扱わない
+        // 経費計算
+        let totalMonthlyExpenses = 0
+        totalMonthlyExpenses += data.rent
+        totalMonthlyExpenses += data.utilities
+
+        // 人件費
+        let laborCost = 0
+        if (data.useDetailedExpenses) {
+            laborCost = data.laborDetails.reduce((sum, item) => sum + item.amount, 0)
+        } else {
+            laborCost = data.laborCostTotal
+        }
+        totalMonthlyExpenses += laborCost
+
+        // Labor Ratio Check (Sales > 0 safe guard)
+        if (monthlySales > 0) {
+            const laborRatio = (laborCost / monthlySales) * 100
+            if (laborRatio < 15) {
+                lowLaborCostAlertTriggered = true
+            }
+        }
+
+        // その他経費・リース
+        let leaseCost = 0
+        if (data.useDetailedExpenses) {
+            leaseCost = data.leaseDetails.reduce((sum, item) => {
+                // 支払期間終了チェック
+                if (item.paymentRemainingMonths && month > item.paymentRemainingMonths) {
+                    return sum
+                }
+                return sum + item.amount
+            }, 0)
+        } else {
+            leaseCost = data.otherExpensesTotal
+        }
+        totalMonthlyExpenses += leaseCost
+        
+        // 営業利益
         const monthlyOperatingProfit = monthlyGrossProfit - totalMonthlyExpenses
 
         if (month <= 12) {
@@ -183,7 +222,6 @@ export function calculatePayback(data: SimulationData): SimulationResult {
         }
 
         // 累積CF更新
-        // ここでは簡易的に 営業利益 ≒ キャッシュフロー とみなす（税金、運転資金増減等は考慮しない）
         cumulative += monthlyOperatingProfit
 
         monthlyData.push({
@@ -202,9 +240,74 @@ export function calculatePayback(data: SimulationData): SimulationResult {
     // 累積CFがプラスに転じた最初の月を探す
     const recoveredIndex = cumulativeCashFlow.findIndex(cf => cf >= 0)
     const paybackMonths = recoveredIndex === -1 ? Infinity : recoveredIndex + 1
+    const paybackYears = paybackMonths !== Infinity ? parseFloat((paybackMonths / 12).toFixed(1)) : Infinity
+    const isPaybackOk = paybackMonths <= 36
 
     // 直近月（1ヶ月目）または平均の営業指標（表示用）
     const firstMonthData = monthlyData[0]
+
+    // cumulative = -Inv + P1 + P2 ...
+    // cumulativeProfit (Sum of Profits) = cumulative + Inv
+    const sumOperatingProfit = cumulative + totalInvestment
+
+    // Target Gap Calculation
+    let targetGap: number | null = null
+    if (!isPaybackOk && targetDeals.length > 0) {
+        let additionalProfit = 0
+        for (let m = 1; m <= 36; m++) {
+            // Target案件の売上・利益を計算
+
+            
+             // Note: Here assuming simple logic for target deals same as main loop
+             // But avoiding code duplication is hard without refactoring into valid Deal calc helper
+             // Inferring simply:
+             const mTargetSales = targetDeals.reduce((sum, d) => {
+                 const endMonth = d.durationMonths ? d.startMonth + d.durationMonths : 999
+                 return (m >= d.startMonth && m < endMonth) ? sum + d.monthlyAmount : sum
+             }, 0)
+             
+             const mTargetFee = targetDeals.reduce((sum, d) => {
+                 const endMonth = d.durationMonths ? d.startMonth + d.durationMonths : 999
+                 return (m >= d.startMonth && m < endMonth && d.isFactoryFeeTarget) ? sum + d.monthlyAmount : sum
+             }, 0) * (data.factoryFeePercentage ? data.factoryFeePercentage / 100 : 0)
+
+             const mTargetCoGS = mTargetSales * (data.costRatio / 100)
+             additionalProfit += (mTargetSales - mTargetCoGS - mTargetFee)
+        }
+        
+        // Check if recovers with additional profit
+        // cumulative (Net Cash at 36mo) + additionalProfit >= 0 ?
+        // cumulative is Final Cash Flow. If (Final Cash + Additional Profit) >= 0 => Recovered?
+        // Wait, definition of Gap is "How much short of Total Investment"?
+        // No, Payback means Cumulative >= 0.
+        // If current Cumulative at 36mo is -100. Need +100.
+        // If additionalProfit is 120. Then OK.
+        // Gap is valid if (Cumulative + Additional) >= 0.
+        // If so, Gap = 0? Or Gap is how much MORE needed?
+        // Usually Gap means "How much Short".
+        // If (Cumulative + Additional) < 0, then Gap = -(Cumulative + Additional).
+        // Wait, logical gap: The user wants to know "If I add targets, can I recover?"
+        // If yes, Gap is 0. If no, Gap is remaining deficit.
+        
+        if (cumulative + additionalProfit >= 0) {
+             targetGap = 0
+        } else {
+             targetGap = -(cumulative + additionalProfit)
+        }
+    }
+
+    // Alerts
+    const alertMessages: string[] = []
+    if (capacityAlertTriggered) {
+        alertMessages.push('⚠️ 売上が人員キャパシティを超過しています。追加採用または外注を検討してください。')
+    }
+    if (lowLaborCostAlertTriggered) {
+        alertMessages.push('⚠️ 人件費率が15%を下回っています。未払い残業代等の労務リスク（簿外債務）の可能性があります。')
+    }
+
+    // Summary Statistics
+    const profitMargin = cumulativeSales > 0 ? (sumOperatingProfit / cumulativeSales) * 100 : 0
+    const roi = totalInvestment > 0 ? (sumOperatingProfit / totalInvestment) * 100 : 0
 
     return {
         monthlyGrossProfit: firstMonthData.grossProfit,
@@ -212,8 +315,28 @@ export function calculatePayback(data: SimulationData): SimulationResult {
         annualCashFlow: firstYearOperatingProfit, // 初年度CF
         totalInvestment,
         paybackMonths,
-        canRecoverIn3Years: paybackMonths <= 36,
+        canRecoverIn3Years: isPaybackOk,
         monthlyData,
-        cumulativeCashFlow
+        cumulativeCashFlow,
+        
+        // Expanded Interface
+        summary: {
+            totalSales: cumulativeSales,
+            totalOperatingProfit: sumOperatingProfit,
+            finalCash: cumulative,
+            paybackMonths: paybackMonths === Infinity ? null : paybackMonths,
+            profitMargin,
+            roi
+        },
+        isPaybackOk,
+        paybackYears,
+        alerts: alertMessages,
+        targetGap,
+        
+        // Legacy
+        cumulativeOperatingProfit: sumOperatingProfit,
+        requiredImprovementPerMonth: !isPaybackOk ? (-(cumulative) / 36) : 0, // Deficit / 36
+        averageMonthlyOperatingProfit: sumOperatingProfit / 36,
+        averageMonthlyFeeRevenue: cumulativeFactoryFee / 36
     }
 }
