@@ -101,32 +101,76 @@ export function StrategyClient() {
     }, [])
 
     // 案件選択時の処理
+    // 案件選択時の処理
     const handleSelectCase = async (linkId: string, responseId: string) => {
         setIsLoadingLinks(true)
         
-        // シミュレーション版の取得
-        const versionsRes = await getSimulationsByLink(linkId)
-        
-        if (versionsRes.success && versionsRes.data.length > 0) {
-            setSimulationVersions(versionsRes.data)
+        try {
+            // シミュレーション版の取得
+            let versionsRes = await getSimulationsByLink(linkId)
             
-            // オリジナル版をデフォルト選択
-            const original = versionsRes.data.find((v: any) => v.version_type === 'original')
-            if (original) {
-                setSelectedVersionId(original.id)
-                setData(original.simulation_data)
+            // Self-Healing: シミュレーションが存在しない場合（バグ等で作成失敗していた場合）、自動生成を試みる
+            if (versionsRes.success && versionsRes.data.length === 0) {
+                console.log('No simulation found. Attempting self-healing...', linkId)
+                
+                // 1. 回答データを取得
+                const { getCollectionResponse, createOriginalSimulation } = await import('./collection/actions')
+                const responseRes = await getCollectionResponse(linkId)
+                
+                if (responseRes.success && responseRes.data) {
+                    // 2. オリジナル版を作成
+                    const createRes = await createOriginalSimulation(linkId, responseRes.data)
+                    if (createRes.success) {
+                        toast({
+                            title: "データ復旧",
+                            description: "シミュレーションデータを自動生成しました",
+                        })
+                        // 3. 再取得
+                        versionsRes = await getSimulationsByLink(linkId)
+                    } else {
+                        toast({
+                            title: "エラー",
+                            description: "シミュレーションデータの生成に失敗しました",
+                            variant: "destructive"
+                        })
+                    }
+                }
+            }
+            
+            if (versionsRes.success && versionsRes.data.length > 0) {
+                setSimulationVersions(versionsRes.data)
+                
+                // オリジナル版をデフォルト選択
+                const original = versionsRes.data.find((v: any) => v.version_type === 'original')
+                if (original) {
+                    setSelectedVersionId(original.id)
+                    setData(original.simulation_data)
+                } else {
+                    setSelectedVersionId(versionsRes.data[0].id)
+                    setData(versionsRes.data[0].simulation_data)
+                }
+                
+                // 選択中の案件情報を設定
+                const link = collectionLinks.find(l => l.id === linkId)
+                if (link) {
+                    setSubmittedLink({ id: link.id, name: link.name })
+                }
+                
+                setViewMode('simulation')
             } else {
-                setSelectedVersionId(versionsRes.data[0].id)
-                setData(versionsRes.data[0].simulation_data)
+                 toast({
+                    title: "データエラー",
+                    description: "この案件のシミュレーションデータが見つかりません",
+                    variant: "destructive"
+                })
             }
-            
-            // 選択中の案件情報を設定
-            const link = collectionLinks.find(l => l.id === linkId)
-            if (link) {
-                setSubmittedLink({ id: link.id, name: link.name })
-            }
-            
-            setViewMode('simulation')
+        } catch (e) {
+            console.error('handleSelectCase error:', e)
+            toast({
+                title: "エラー",
+                description: "予期せぬエラーが発生しました",
+                variant: "destructive"
+            })
         }
         
         setIsLoadingLinks(false)
