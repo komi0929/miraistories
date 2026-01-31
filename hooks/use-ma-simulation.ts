@@ -62,7 +62,8 @@ export const useMaSimulation = (data: InputData): SimulationResult => {
             // skeletonCostはそのまま
             // leaseDetailsの型は互換性あり（paymentRemainingMonthsはSimulationData側でもサポート済）
             deals: data.deals || [],
-            maxCapacitySales: data.maxCapacitySales || 0
+            maxCapacitySales: data.maxCapacitySales || 0,
+            probabilityFilter: 'high_only' // デフォルトはHigh以上（収集フォームの基準）
         }
 
         const result = calculatePayback(simData)
