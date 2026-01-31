@@ -500,7 +500,7 @@ export function CollectFormClient({ token: _token, linkId }: CollectFormClientPr
                 
                 <FactoryFeeSection
                     data={formData}
-                    averageMonthlyFeeRevenue={simResult.averageMonthlyFeeRevenue}
+                    averageMonthlyFeeRevenue={simResult.averageMonthlyOperatingProfit}
                     onChange={setFormData}
                 />
                 

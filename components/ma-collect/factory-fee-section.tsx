@@ -67,13 +67,13 @@ export function FactoryFeeSection({ data, averageMonthlyFeeRevenue, onChange }: 
                         </div>
                         <div>
                             <h4 className="font-bold text-purple-900 text-sm mb-1">
-                                委託収益シミュレーション
+                                月間利益シミュレーション
                             </h4>
                             <p className="text-sm text-purple-800 leading-relaxed">
-                                現在の売上予測なら、貴社に <span className="font-bold text-lg underline decoration-purple-400 decoration-2 underline-offset-2">月額 約¥{Math.floor(averageMonthlyFeeRevenue || 0).toLocaleString()}</span> の委託収益が発生します
+                                現在の売上予測なら、貴社に <span className="font-bold text-lg underline decoration-purple-400 decoration-2 underline-offset-2">月額 約¥{Math.floor(averageMonthlyFeeRevenue || 0).toLocaleString()}</span> の営業利益が見込まれます
                             </p>
                             <p className="text-xs text-purple-600 mt-2">
-                                ※ 3年間の平均月額受取額（予測）
+                                ※ 3年間の平均月額利益（EBITDA予測）
                             </p>
                         </div>
                     </div>
